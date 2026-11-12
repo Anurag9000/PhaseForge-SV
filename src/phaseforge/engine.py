@@ -46,6 +46,7 @@ class RunConfig:
     score: ScoreConfig = field(default_factory=ScoreConfig)
     transform: str = "pca"
     dimensions: int = 24
+    learned: dict = field(default_factory=dict)
     seeds: tuple[int, ...] = (2026, 3107, 4109, 5101, 6101)
     enrolment_size: int = 3
     max_frames_per_background_file: int = 32
@@ -67,6 +68,7 @@ class RunConfig:
             feature=FeatureConfig(**f), em=EMConfig(**data.get("em", {})),
             map=MAPConfig(**data.get("map", {})), score=ScoreConfig(**data.get("score", {})),
             transform=data.get("transform", "pca"), dimensions=int(data.get("dimensions", 24)),
+            learned=dict(data.get("learned", {})),
             seeds=tuple(data.get("seeds", [2026, 3107, 4109, 5101, 6101])),
             enrolment_size=int(data.get("enrolment_size", 3)),
             max_frames_per_background_file=int(data.get("max_frames_per_background_file", 32)),
@@ -260,10 +262,22 @@ def run(
     t0 = time.perf_counter()
     features = extract_features(data, ids, config.feature, output / "cache", device)
     data.close() if isinstance(data, KaggleData) else None
-    transformed, transform = fit_background_transform(
-        features, bg_ids, config.transform, config.dimensions,
-        config.max_fit_transform_frames, seed=config.seeds[0]
-    )
+    if config.transform in ("speaker_cnn", "contrastive_cnn"):
+        from .learned import PhaseEncoderConfig, learn_phase_encoder
+        learned_cfg = dict(config.learned)
+        learned_cfg["task"] = (
+            "background_speaker" if config.transform == "speaker_cnn" else "contrastive"
+        )
+        learned_cfg.setdefault("embedding", config.dimensions)
+        learned_cfg.setdefault("seed", config.seeds[0])
+        transformed, transform = learn_phase_encoder(
+            features, bg, PhaseEncoderConfig(**learned_cfg), device
+        )
+    else:
+        transformed, transform = fit_background_transform(
+            features, bg_ids, config.transform, config.dimensions,
+            config.max_fit_transform_frames, seed=config.seeds[0]
+        )
     del features
     transformed = {key: value.to(device) for key, value in transformed.items()}
     pool = _background_frames(transformed, bg_ids,
