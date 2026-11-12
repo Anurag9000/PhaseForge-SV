@@ -48,7 +48,10 @@ def report(scores: torch.Tensor, labels: torch.Tensor, target_far: float = .01) 
     auc = float(torch.trapz(tpr, fpr))
     eligible = torch.where(fpr <= target_far)[0]
     index = int(eligible[-1])
-    threshold = float(curve["thresholds"][index])
+    # Score > theta is the assignment's decision rule. Move theta just below
+    # the selected ROC score so ties at that value count as accepted.
+    selected = curve["thresholds"][index]
+    threshold = float(torch.nextafter(selected, selected.new_full((), -float("inf"))))
     s = torch.as_tensor(scores).flatten()
     y = torch.as_tensor(labels).bool().flatten()
     accepted = s > threshold
