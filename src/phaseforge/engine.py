@@ -260,7 +260,9 @@ def run(
          [r["test_file"] for r in eval_trials] if config.evaluate_eval else [])
     ))
     t0 = time.perf_counter()
-    features = extract_features(data, ids, config.feature, output / "cache", device)
+    features = extract_features(
+        data, ids, config.feature, output.parent / ".phase_cache", device
+    )
     data.close() if isinstance(data, KaggleData) else None
     if config.transform in ("speaker_cnn", "contrastive_cnn"):
         from .learned import PhaseEncoderConfig, learn_phase_encoder

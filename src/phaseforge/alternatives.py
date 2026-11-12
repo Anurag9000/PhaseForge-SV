@@ -104,7 +104,10 @@ def run_alternative(
         requested.update(r["file_id"] for r in eval_enrol)
         requested.update(r["test_file"] for r in eval_trials)
     start = time.perf_counter()
-    feature = extract_features(data, sorted(requested), config.feature, output / "cache", device)
+    feature = extract_features(
+        data, sorted(requested), config.feature,
+        output.parent / ".phase_cache", device
+    )
     transformed, transform = fit_background_transform(
         feature, bg_ids, config.transform, config.dimensions,
         config.max_fit_transform_frames
