@@ -25,6 +25,9 @@ on:
       data_path:
         description: Existing dataset directory on self-hosted runner
         required: true
+      results_path:
+        description: Persistent absolute results directory on self-hosted runner
+        required: true
       config_path:
         description: Relative path to configuration
         required: true
@@ -52,11 +55,13 @@ jobs:
           EXPERIMENT_CONFIG: ${{ inputs.config_path }}
           RESEARCH_BENCHMARK: ${{ inputs.benchmark_path }}
           JOB_IDENTIFIER: ${{ github.run_id }}
+          PERSISTENT_RESULTS_PATH: ${{ inputs.results_path }}
           SUITE_JOB_LIMIT: ${{ inputs.max_suite_jobs }}
         shell: bash
         run: |
           set -euo pipefail
-          OUTPUT="runs/gpu-job-${JOB_IDENTIFIER}"
+          test -n "$PERSISTENT_RESULTS_PATH" || { echo 'Missing results_path'; exit 1; }
+          OUTPUT="${PERSISTENT_RESULTS_PATH}/${EXPERIMENT_MODE}"
           mkdir -p "$OUTPUT"
           if [ "$SOURCE_TRACK" = kaggle ]; then
             python -m phaseforge.cli audit-kaggle --data "$SOURCE_DATA_PATH"
@@ -80,8 +85,8 @@ jobs:
         with:
           name: phaseforge-results-${{ github.run_id }}
           path: |
-            runs/gpu-job-*/**/*.json
-            runs/gpu-job-*/**/*.csv
-            runs/gpu-job-*/**/*.png
+            ${{ inputs.results_path }}/**/*.json
+            ${{ inputs.results_path }}/**/*.csv
+            ${{ inputs.results_path }}/**/*.png
           if-no-files-found: warn
           retention-days: 30
