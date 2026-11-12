@@ -67,6 +67,28 @@ def tiny_kaggle(tmp_path):
     return tmp_path
 
 
+def test_kaggle_audit_rejects_manifest_file_overlap(tiny_kaggle):
+    trials = list(csv.DictReader((tiny_kaggle / "dev_trials.csv").open()))
+    trials[0]["test_file"] = "b0_0"
+    _csv(
+        tiny_kaggle / "dev_trials.csv",
+        ["trial_id", "claimed_id", "test_file", "label"], trials
+    )
+    with pytest.raises(ValueError, match="audio file-ID overlap"):
+        KaggleData(tiny_kaggle)
+
+
+def test_kaggle_audit_rejects_unenrolled_claim(tiny_kaggle):
+    trials = list(csv.DictReader((tiny_kaggle / "dev_trials.csv").open()))
+    trials[0]["claimed_id"] = "not_enrolled"
+    _csv(
+        tiny_kaggle / "dev_trials.csv",
+        ["trial_id", "claimed_id", "test_file", "label"], trials
+    )
+    with pytest.raises(ValueError, match="speaker not enrolled"):
+        KaggleData(tiny_kaggle)
+
+
 def test_kaggle_allowlist_and_source_isolation(tiny_kaggle):
     with KaggleData(tiny_kaggle) as d:
         assert d.summary()["background_utterances"] == 12
