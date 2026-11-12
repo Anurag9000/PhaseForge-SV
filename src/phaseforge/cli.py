@@ -9,6 +9,7 @@ from .data import KaggleData, google_benchmark, inventory_google
 from .engine import RunConfig, run
 from .experiments import fuse_saved_runs, sweep, export_verified_kaggle_fusion
 from .optimizer import adaptive_optimize
+from .bayes_search import bayesian_search
 from .studies import gmm_behavior_study, run_proxy
 from .alternatives import run_alternative
 from .hmm import HMMConfig
@@ -59,6 +60,10 @@ def main(argv: list[str] | None = None) -> None:
     alt.add_argument("--states", type=int, default=4)
     alt.add_argument("--state-mixtures", type=int, default=4)
     alt.add_argument("--hmm-iters", type=int, default=10)
+    bayes = commands.add_parser("bayes", help="Resume Bayesian phase/GMM optimization")
+    bayes.add_argument("--data", required=True)
+    bayes.add_argument("--config", required=True)
+    bayes.add_argument("--output", required=True)
     adaptive = commands.add_parser("optimize", help="Stage-wise resumeable empirical improvement")
     adaptive.add_argument("--data", required=True)
     adaptive.add_argument("--config", required=True)
@@ -133,6 +138,10 @@ def main(argv: list[str] | None = None) -> None:
             args.states, args.state_mixtures,
         )
         print(json.dumps(result["metrics"], indent=2))
+    elif args.action == "bayes":
+        spec = json.loads(Path(args.config).read_text())
+        result = bayesian_search(args.data, spec, args.output)
+        print(json.dumps(result, indent=2))
     elif args.action == "optimize":
         spec = json.loads(Path(args.config).read_text())
         result = adaptive_optimize(args.data, spec, args.output)
