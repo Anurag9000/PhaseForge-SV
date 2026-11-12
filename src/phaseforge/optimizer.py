@@ -9,11 +9,33 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import math
 from pathlib import Path
 
 from .engine import RunConfig, run
 from .experiments import _deep_set
 from .studies import run_proxy
+
+
+
+def aggregate_validation(values: list[float], objective: str = "mean") -> float:
+    """Compare equally weighted, genuinely speaker-heldout proxy splits.
+
+    A mean-plus-standard-deviation objective is conservative when one
+    candidate has unstable results across different speaker populations.
+    """
+    if not values or any(not math.isfinite(x) for x in values):
+        raise ValueError("Expected nonempty finite validation EERs")
+    mean = sum(values) / len(values)
+    variance = sum((v - mean) ** 2 for v in values) / len(values)
+    if objective == "mean":
+        return mean
+    if objective == "worst":
+        return max(values)
+    if objective == "mean_plus_std":
+        return mean + math.sqrt(variance)
+    raise ValueError(f"Unknown robustness objective: {objective}")
+
 
 
 def adaptive_optimize(
@@ -33,6 +55,11 @@ def adaptive_optimize(
     tolerance = float(search_spec.get("minimum_improvement", 1e-5))
     protocol = search_spec.get("validation", "proxy")
     rotations = int(search_spec.get("proxy_rotations", 1))
+    split_seeds = tuple(int(x) for x in search_spec.get("proxy_split_seeds", [2026]))
+    objective = str(search_spec.get("selection_objective", "mean"))
+    if not split_seeds or len(set(split_seeds)) != len(split_seeds):
+        raise ValueError("Require distinct, nonempty proxy split seeds")
+    aggregate_validation([.1, .2], objective)
     if protocol not in ("proxy", "dev"):
         raise ValueError("validation must be proxy or dev")
     if rounds < 1:
@@ -47,21 +74,35 @@ def adaptive_optimize(
         config = copy.deepcopy(config)
         config["evaluate_eval"] = False
         serial = json.dumps(config, sort_keys=True)
-        key = hashlib.sha256((protocol + str(rotations) + serial).encode()).hexdigest()[:16]
+        experiment_identity = json.dumps({
+            "data_root": str(Path(data).resolve()),
+            "protocol": protocol, "rotations": rotations,
+            "split_seeds": split_seeds, "objective": objective,
+            "config": config,
+        }, sort_keys=True)
+        key = hashlib.sha256(experiment_identity.encode()).hexdigest()[:16]
         if key in cache:
             return cache[key]
         location = output / "runs" / key
         try:
             if protocol == "proxy":
-                result = run_proxy(data, RunConfig.from_dict(config), location,
-                                   rotations=rotations)
-                value = float(result["mean_eer"])
+                split_values = []
+                for speaker_seed in split_seeds:
+                    result = run_proxy(
+                        data, RunConfig.from_dict(config),
+                        location / f"split_{speaker_seed}",
+                        seed=speaker_seed, rotations=rotations
+                    )
+                    split_values.append(float(result["mean_eer"]))
             else:
                 result = run(data, RunConfig.from_dict(config), location, track="kaggle")
-                value = float(result["metrics"]["eer"])
+                split_values = [float(result["metrics"]["eer"])]
+            value = aggregate_validation(split_values, objective)
             row = {
                 "key": key, "stage": stage, "change": change,
                 "value": value, "state": "complete",
+                "split_eers": split_values,
+                "mean_eer": sum(split_values) / len(split_values),
                 "config": config, "run_dir": str(location),
             }
             cache[key] = row
@@ -108,7 +149,12 @@ def adaptive_optimize(
             break
     summary = {
         "protocol": protocol, "rounds_requested": rounds,
+        "proxy_split_seeds": split_seeds,
+        "proxy_rotations": rotations,
+        "selection_objective": objective,
         "best_validation_eer": incumbent["value"],
+        "best_mean_validation_eer": incumbent["mean_eer"],
+        "best_split_eers": incumbent["split_eers"],
         "best_config": incumbent["config"],
         "history": history,
         "trials_completed": len([r for r in records if r["state"] == "complete"]),
