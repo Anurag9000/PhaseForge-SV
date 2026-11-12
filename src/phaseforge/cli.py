@@ -7,7 +7,8 @@ from pathlib import Path
 
 from .data import KaggleData, google_benchmark, inventory_google
 from .engine import RunConfig, run
-from .experiments import fuse_saved_runs, sweep
+from .experiments import fuse_saved_runs, sweep, export_verified_kaggle_fusion
+from .optimizer import adaptive_optimize
 from .studies import gmm_behavior_study, run_proxy
 from .alternatives import run_alternative
 from .hmm import HMMConfig
@@ -52,6 +53,13 @@ def main(argv: list[str] | None = None) -> None:
     alt.add_argument("--states", type=int, default=4)
     alt.add_argument("--state-mixtures", type=int, default=4)
     alt.add_argument("--hmm-iters", type=int, default=10)
+    adaptive = commands.add_parser("optimize", help="Stage-wise resumeable empirical improvement")
+    adaptive.add_argument("--data", required=True)
+    adaptive.add_argument("--config", required=True)
+    adaptive.add_argument("--output", required=True)
+    export = commands.add_parser("export-fusion", help="Audit and export Kaggle-only fused scores")
+    export.add_argument("--fusion", required=True)
+    export.add_argument("--data", required=True)
     fusion = commands.add_parser("fuse", help="Dev-fitted scale fusion across trained runs")
     fusion.add_argument("--runs", nargs="+", required=True)
     fusion.add_argument("--output", required=True)
@@ -99,6 +107,18 @@ def main(argv: list[str] | None = None) -> None:
             args.states, args.state_mixtures,
         )
         print(json.dumps(result["metrics"], indent=2))
+    elif args.action == "optimize":
+        spec = json.loads(Path(args.config).read_text())
+        result = adaptive_optimize(args.data, spec, args.output)
+        print(json.dumps({
+            "validation": result["protocol"],
+            "best_eer": result["best_validation_eer"],
+            "best_config": str(Path(args.output) / "best_config.json"),
+            "completed": result["trials_completed"],
+            "failed": result["trials_failed"],
+        }, indent=2))
+    elif args.action == "export-fusion":
+        print(json.dumps(export_verified_kaggle_fusion(args.fusion, args.data), indent=2))
     elif args.action == "fuse":
         print(json.dumps(fuse_saved_runs(args.runs, args.output, args.weights,
                                         not args.no_eval), indent=2))
