@@ -14,6 +14,7 @@ from .alternatives import run_alternative
 from .hmm import HMMConfig
 from .finalize import finalize_kaggle
 from .robustness import run_robustness
+from .diagnostics import analyze_score_csv
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -72,6 +73,11 @@ def main(argv: list[str] | None = None) -> None:
     fin.add_argument("--runs", nargs="+", required=True)
     fin.add_argument("--output", required=True)
     fin.add_argument("--weights", nargs="+", type=float)
+    diagnosis = commands.add_parser("analyze", help="Audit per-speaker errors and paired model differences")
+    diagnosis.add_argument("--scores", required=True)
+    diagnosis.add_argument("--output", required=True)
+    diagnosis.add_argument("--compare", default=None)
+    diagnosis.add_argument("--target-far", type=float, default=.01)
     robust = commands.add_parser("robustness", help="Probe a frozen Kaggle UBM against perturbed development WAVs")
     robust.add_argument("--data", required=True)
     robust.add_argument("--run", required=True)
@@ -134,6 +140,9 @@ def main(argv: list[str] | None = None) -> None:
     elif args.action == "fuse":
         print(json.dumps(fuse_saved_runs(args.runs, args.output, args.weights,
                                         not args.no_eval), indent=2))
+    elif args.action == "analyze":
+        result = analyze_score_csv(args.scores, args.output, args.target_far, args.compare)
+        print(json.dumps(result, indent=2))
     elif args.action == "robustness":
         result = run_robustness(args.data, args.run, args.output, args.seed)
         print(json.dumps(result["conditions"], indent=2))
