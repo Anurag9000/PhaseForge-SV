@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from dataclasses import replace
 from pathlib import Path
 
 from .data import KaggleData, google_benchmark, inventory_google
@@ -47,6 +48,8 @@ def main(argv: list[str] | None = None) -> None:
         p.add_argument("--track", choices=["kaggle", "google"], default="kaggle")
         p.add_argument("--benchmark", default=None)
         p.add_argument("--ubm-words", choices=["stop", "all"], default="stop")
+        p.add_argument("--dev-only", action="store_true",
+                       help="Do not load or score evaluation/locked-test recordings")
     for name in ("proxy", "gmm-study"):
         p = commands.add_parser(name, help=f"Execute {name} on disjoint Kaggle background speakers")
         p.add_argument("--data", required=True)
@@ -63,6 +66,8 @@ def main(argv: list[str] | None = None) -> None:
     alt.add_argument("--track", choices=["kaggle", "google"], default="kaggle")
     alt.add_argument("--benchmark", default=None)
     alt.add_argument("--ubm-words", choices=["stop", "all"], default="stop")
+    alt.add_argument("--dev-only", action="store_true",
+                     help="Do not access locked research test while selecting models")
     alt.add_argument("--states", type=int, default=4)
     alt.add_argument("--state-mixtures", type=int, default=4)
     alt.add_argument("--hmm-iters", type=int, default=10)
@@ -117,6 +122,8 @@ def main(argv: list[str] | None = None) -> None:
         ), indent=2))
     elif args.action == "run":
         config = RunConfig.from_dict(json.loads(Path(args.config).read_text()))
+        if args.dev_only:
+            config = replace(config, evaluate_eval=False)
         result = run(args.data, config, args.output, args.track, args.benchmark,
                      args.ubm_words)
         print(json.dumps(result["metrics"], indent=2))
@@ -141,6 +148,8 @@ def main(argv: list[str] | None = None) -> None:
         }, indent=2))
     elif args.action == "run-alt":
         cfg = RunConfig.from_dict(json.loads(Path(args.config).read_text()))
+        if args.dev_only:
+            cfg = replace(cfg, evaluate_eval=False)
         hmm_cfg = HMMConfig(states=args.states, mixtures_per_state=args.state_mixtures,
                             iterations=args.hmm_iters)
         result = run_alternative(
