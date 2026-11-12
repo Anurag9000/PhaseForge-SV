@@ -1,0 +1,11 @@
+{
+  "feature":{"mode":"group","win":400,"hop":160,"n_fft":512,
+             "normalization":"utterance","bands":24,"masked_mean":false},
+  "em":{"mixtures":32,"covariance":"diag","reg":0.02,"iterations":35},
+  "map":{"relevance":0.5},
+  "score":{"norm":"s","cohort_speakers":32,"cohort_test_files":50},
+  "transform":"pca","dimensions":24,
+  "background_sampling":"speaker_balanced",
+  "seeds":[2026,3107,4109,5101,6101],
+  "enrolment_size":3,"evaluate_eval":true,"device":"auto"
+}
