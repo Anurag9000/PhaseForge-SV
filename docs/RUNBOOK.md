@@ -40,3 +40,35 @@ GitHub CI passing is evidence of synthetic and end-to-end smoke tests,
 not evidence of real-world EER improvement. Only a complete dataset run
 with saved prediction CSV, configuration, seed and train/eval provenance
 establishes a new measured benchmark.
+
+
+## Exact prior notebook behavior, Kaggle source only
+
+    bash scripts/reproduce_historical_best.sh /data/kaggle runs/historical
+
+The two historical configurations include five seeds, ensemble-first
+S-normalization, matched background cohort seed and exact phase
+feature sizes. Report the resulting observed development EER instead
+of assuming it equals the previous notebook's 4.61%.
+
+## Resumable 36-family experiment campaign
+
+    python -m phaseforge.cli suite --data /data/kaggle --config configs/phaseforge_exhaustive_suite.json --output runs/exhaustive --max-jobs 3
+    python -m phaseforge.cli suite --data /data/kaggle --config configs/phaseforge_exhaustive_suite.json --output runs/exhaustive --max-jobs 36
+
+The first invocation validates the early job families, and the second resumes
+the saved ledger and completes the remaining jobs. Each registered experiment
+has its own config, result.json, development scores and failure metadata.
+
+For a GPU runner select workflow `PhaseForge GPU research jobs (self-hosted)`,
+set mode=`suite`, config_path=`configs/phaseforge_exhaustive_suite.json`,
+max_suite_jobs=36, and a persistent absolute `results_path` located outside
+the Git checkout. Reuse that results_path to resume; untracked Git checkout
+folders may be cleaned by GitHub Actions.
+
+Google speaker-disjoint protocol can be selected with
+`split-google --target-enrol 1 --target-test 1`. First compare research
+candidates with `run --dev-only --track google`, then score locked research
+test only for the selected candidate. The
+`Original Google Speech Commands research` manual Actions workflow
+downloads the public archive for independent research, never Kaggle training.
