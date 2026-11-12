@@ -22,6 +22,8 @@ from .hmm import HMMConfig, LeftRightHMMUBM
 from .metrics import grouped_bootstrap, report
 from .temporal import PhaseDTW, TimeBinnedUBM
 from .transforms import fit_background_transform
+from .scratch import ScratchGMMComparison
+from .gmm import EMConfig, TorchGMM
 
 
 def _adapted_templates(
@@ -72,8 +74,8 @@ def run_alternative(
     ubm_pool: str = "stop", hmm: HMMConfig | None = None,
     time_states: int = 4, mixtures_per_state: int = 8,
 ) -> dict:
-    if method not in ("hmm", "timebin", "dtw"):
-        raise ValueError("Alternative method must be hmm, timebin or dtw")
+    if method not in ("hmm", "timebin", "dtw", "scratch"):
+        raise ValueError("Alternative method must be hmm, timebin, dtw or scratch")
     config.validate()
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
@@ -122,6 +124,21 @@ def run_alternative(
             recordings, config.em
         )
         history = [m.history for m in alternative.models]
+    elif method == "scratch":
+        training_frames = torch.cat([
+            recording[torch.linspace(
+                0, len(recording) - 1, min(len(recording), config.max_frames_per_background_file),
+                device=recording.device,
+            ).long()] for recording in recordings
+        ], dim=0)
+        bg_ubm = TorchGMM(config.em).fit(training_frames)
+        alternative = ScratchGMMComparison(
+            bg_ubm, mixtures=min(8, config.em.mixtures),
+            covariance_floor=max(.05, config.em.reg),
+            max_iterations=config.em.iterations,
+            seed=config.em.seed
+        )
+        history = bg_ubm.history
     else:
         alternative = PhaseDTW()
         history = []
