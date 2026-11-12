@@ -84,17 +84,19 @@ def _transformer(artifact: dict, device: torch.device):
         return lambda x: model(x[None]).squeeze(0)
     if transform is None:
         return lambda x: x
-    # PCA/ICA tensors are saved as objects by the engine, moved explicitly here.
-    if hasattr(transform, "mean"):
-        transform.mean = transform.mean.to(device)
-    if hasattr(transform, "components"):
-        transform.components = transform.components.to(device)
-        transform.values = transform.values.to(device)
-    if hasattr(transform, "pca"):
-        transform.pca.mean = transform.pca.mean.to(device)
-        transform.pca.components = transform.pca.components.to(device)
-        transform.pca.values = transform.pca.values.to(device)
-        transform.W = transform.W.to(device)
+    # Torch-loaded transforms can contain nested global CMVN/PCA/ICA objects.
+    # Move every learned tensor to the scoring device recursively.
+    def move_parameters(obj):
+        for name in ("mean", "std", "components", "values", "W"):
+            item = getattr(obj, name, None)
+            if isinstance(item, torch.Tensor):
+                setattr(obj, name, item.to(device))
+        for child_name in ("pca", "global_norm", "projection"):
+            child = getattr(obj, child_name, None)
+            if child is not None:
+                move_parameters(child)
+
+    move_parameters(transform)
     return transform
 
 
