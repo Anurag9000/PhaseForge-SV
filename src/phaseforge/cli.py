@@ -51,7 +51,7 @@ def main(argv: list[str] | None = None) -> None:
     alt.add_argument("--data", required=True)
     alt.add_argument("--config", required=True)
     alt.add_argument("--output", required=True)
-    alt.add_argument("--method", choices=["hmm", "timebin", "dtw"], required=True)
+    alt.add_argument("--method", choices=["hmm", "timebin", "dtw", "scratch"], required=True)
     alt.add_argument("--track", choices=["kaggle", "google"], default="kaggle")
     alt.add_argument("--benchmark", default=None)
     alt.add_argument("--ubm-words", choices=["stop", "all"], default="stop")
