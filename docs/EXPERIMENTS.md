@@ -40,3 +40,6 @@ from source-code implementation alone.
 The classical magnitude-normalized modified group delay is not used as a
 competition input. The signed-power clipped phase derivative is a phase-only
 surrogate, labeled explicitly as such in the source.
+
+Independent per-speaker scratch EM with 1/2/3 takes is implemented in `scratch.py`
+and executable with `run-alt --method scratch`; its scores are research-only.
