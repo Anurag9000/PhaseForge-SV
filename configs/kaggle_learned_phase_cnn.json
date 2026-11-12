@@ -1,0 +1,14 @@
+{
+  "feature":{"mode":"multi","multi_modes":["group","temporal"],
+             "multi_windows":[400,640],"bands":24,
+             "normalization":"partial","mean_strength":0.5,"std_strength":0.5},
+  "learned":{"task":"background_speaker","hidden":64,"embedding":24,"epochs":12,
+             "batch_size":32,"learning_rate":0.001},
+  "transform":"speaker_cnn",
+  "dimensions":24,
+  "em":{"mixtures":32,"covariance":"diag","iterations":35,"reg":0.02},
+  "map":{"relevance":4},
+  "score":{"norm":"s","cohort_speakers":32,"cohort_test_files":50},
+  "seeds":[2026,3107,4109],
+  "evaluate_eval":true,"device":"auto"
+}
