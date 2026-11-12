@@ -113,6 +113,14 @@ def load_research_manifests(benchmark: str | Path, pool: str = "stop") -> dict:
         raise ValueError("Google UBM word pool must be stop or all")
     benchmark = Path(benchmark)
     protocol = json.loads((benchmark / "google_benchmark.json").read_text())
+    manifest_digest = hashlib.sha256(
+        (benchmark / "google_manifest.csv").read_bytes()
+    ).hexdigest()
+    if protocol.get("source_manifest_sha256") != manifest_digest:
+        raise PermissionError(
+            "Locked Google speaker/trial benchmark no longer matches its "
+            "source inventory fingerprint"
+        )
     speakers = {r["speaker_id"]: r["split"] for r in read_csv(
         benchmark / "google_speaker_splits.csv"
     )}
