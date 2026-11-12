@@ -43,3 +43,8 @@ surrogate, labeled explicitly as such in the source.
 
 Independent per-speaker scratch EM with 1/2/3 takes is implemented in `scratch.py`
 and executable with `run-alt --method scratch`; its scores are research-only.
+
+Bayesian/TPE hyperparameter optimization is available via optional Optuna
+(`pip install -e '.[search]'`) and `phaseforge bayes --data ... --config
+configs/bayesian_phase_search.json --output runs/bayesian`; validation defaults
+to background-speaker proxy EER, with SQLite-resumable study results.
