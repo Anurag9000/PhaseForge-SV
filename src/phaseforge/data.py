@@ -317,7 +317,6 @@ def google_benchmark(
             "genuine_test_takes_per_speaker": target_test,
             "wrong_enrolled_claims_per_test": negatives_per_test,
             "minimum_target_speakers": minimum_targets,
-        "source_manifest_sha256": manifest_sha256,
             "source_manifest_sha256": manifest_sha256,
         }
         if any(previous.get(k) != v for k, v in expected.items()):
@@ -377,6 +376,7 @@ def google_benchmark(
         "genuine_test_takes_per_speaker": target_test,
         "wrong_enrolled_claims_per_test": negatives_per_test,
         "minimum_target_speakers": minimum_targets,
+        "source_manifest_sha256": manifest_sha256,
         "background_speakers": sum(v == "background" for v in split.values()),
         "ubm_stop": len(bg_stop), "ubm_all_words": len(bg_all),
         "research_only": True,
