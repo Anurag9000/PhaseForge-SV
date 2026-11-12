@@ -20,7 +20,10 @@ from .data import GoogleResearchData, KaggleData, read_csv, write_csv
 from .features import FeatureConfig, PhaseExtractor
 from .gmm import EMConfig, MAPConfig, TorchGMM
 from .metrics import grouped_bootstrap, report
-from .scoring import ScoreConfig, cohort_normalize, enrolled_models, score_trials
+from .scoring import (
+    ScoreConfig, cohort_normalize, cohort_score_tables,
+    ensemble_cohort_normalize, enrolled_models, score_trials,
+)
 from .transforms import fit_background_transform
 
 
@@ -282,10 +285,10 @@ def _cohort(
         {"speaker_id": speaker, "file_id": f, "enrol_index": i}
         for speaker in chosen for i, f in enumerate(sorted(speaker_files[speaker])[:3])
     ]
-    background_test = [
+    background_test = sorted(
         row["file_id"] for row in background
         if row["speaker_id"] not in set(chosen)
-    ]
+    )
     if not background_test:
         raise ValueError("No cohort-disjoint background test recordings")
     selected = rng.sample(background_test, min(cfg_score.cohort_test_files,
@@ -404,6 +407,11 @@ def run(
     )
     labels = torch.tensor([int(row["label"]) for row in dev_trials], device="cpu")
     dev_per_seed, eval_per_seed, diagnostics = [], [], []
+    after_ensemble = (
+        config.score.norm != "none"
+        and config.score.norm_stage == "after_ensemble"
+    )
+    dev_cohort_tables, eval_cohort_tables = [], []
     for seed in config.seeds:
         set_seed(seed)
         em = replace(config.em, seed=seed)
@@ -413,11 +421,21 @@ def run(
         )
         raw_dev = score_trials(trained, transformed, dev_trials, adapted_dev, config.score)
         if config.score.norm != "none":
+            cohort_seed = config.score.cohort_seed if after_ensemble else seed
             cohorts, cohort_tests = _cohort(
-                bg, transformed, trained, config.map, config.score, seed
+                bg, transformed, trained, config.map, config.score, cohort_seed
             )
-            dev = cohort_normalize(trained, transformed, dev_trials, raw_dev,
-                                   adapted_dev, cohorts, cohort_tests, config.score)
+            if after_ensemble:
+                dev_cohort_tables.append(cohort_score_tables(
+                    trained, transformed, dev_trials, adapted_dev,
+                    cohorts, cohort_tests, config.score
+                ))
+                dev = raw_dev
+            else:
+                dev = cohort_normalize(
+                    trained, transformed, dev_trials, raw_dev,
+                    adapted_dev, cohorts, cohort_tests, config.score
+                )
         else:
             dev = raw_dev
         dev_per_seed.append(dev.cpu())
@@ -428,8 +446,17 @@ def run(
             raw_eval = score_trials(trained, transformed, eval_trials, adapted_eval,
                                     config.score)
             if config.score.norm != "none":
-                ev = cohort_normalize(trained, transformed, eval_trials, raw_eval,
-                                      adapted_eval, cohorts, cohort_tests, config.score)
+                if after_ensemble:
+                    eval_cohort_tables.append(cohort_score_tables(
+                        trained, transformed, eval_trials, adapted_eval,
+                        cohorts, cohort_tests, config.score
+                    ))
+                    ev = raw_eval
+                else:
+                    ev = cohort_normalize(
+                        trained, transformed, eval_trials, raw_eval,
+                        adapted_eval, cohorts, cohort_tests, config.score
+                    )
             else:
                 ev = raw_eval
             eval_per_seed.append(ev.cpu())
@@ -453,11 +480,19 @@ def run(
             }, output / f"model_seed_{seed}.pt")
         print(f"seed={seed} dev_EER={report(dev.cpu(), labels)['eer']:.4%}", flush=True)
     mean_dev = torch.stack(dev_per_seed).mean(0)
+    if after_ensemble:
+        mean_dev = ensemble_cohort_normalize(
+            dev_trials, mean_dev, dev_cohort_tables, config.score
+        )
     if not torch.isfinite(mean_dev).all():
         raise FloatingPointError("Nonfinite development predictions")
     _save_scores(output / "development_scores.csv", dev_trials, mean_dev, labeled=True)
     if config.evaluate_eval:
         mean_eval = torch.stack(eval_per_seed).mean(0)
+        if after_ensemble:
+            mean_eval = ensemble_cohort_normalize(
+                eval_trials, mean_eval, eval_cohort_tables, config.score
+            )
         if not torch.isfinite(mean_eval).all():
             raise FloatingPointError("Nonfinite evaluation predictions")
         _save_scores(
