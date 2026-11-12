@@ -151,13 +151,29 @@ def run_alternative(
         enroll_eval = _adapted_templates(feature, eval_enrol, config.enrolment_size)
         adapted_eval = _models_for_claims(alternative, enroll_eval, method, config)
         eval_scores = _trial_scores(alternative, eval_trials, feature, adapted_eval, method)
-        _save_scores(output / "evaluation_scores.csv", eval_trials, eval_scores, labeled=False)
+        _save_scores(
+            output / "evaluation_scores.csv", eval_trials, eval_scores,
+            labeled=(track == "google"),
+        )
+    test_metrics = None
+    if track == "google" and config.evaluate_eval:
+        if not all("label" in trial for trial in eval_trials):
+            raise ValueError("Missing labels in locked Google research test")
+        test_labels = torch.tensor([int(row["label"]) for row in eval_trials])
+        test_metrics = report(eval_scores, test_labels, config.target_far)
+        test_metrics["bootstrap_by_speaker"] = grouped_bootstrap(
+            eval_trials, eval_scores, group_key="claimed_id"
+        )
+        (output / "locked_google_test_metrics.json").write_text(
+            json.dumps(test_metrics, indent=2)
+        )
     result = {
         "method": method, "track": track, "research_only": True,
         "eligible_for_mandatory_kaggle_baseline": False,
         "config": config.to_dict(), "hmm_config": asdict(hmm or HMMConfig())
         if method == "hmm" else None,
         "metrics": report(dev_scores, labels),
+        "locked_google_test_metrics": test_metrics,
         "bootstrap_by_speaker": grouped_bootstrap(dev_trials, dev_scores, group_key="claimed_id"),
         "training_history": history,
         "elapsed_seconds": time.perf_counter() - start,
