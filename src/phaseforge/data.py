@@ -19,6 +19,23 @@ from typing import Iterable
 import torch
 import torchaudio
 
+def decode_pcm16_wav(content: bytes) -> tuple[torch.Tensor, int]:
+    """Read mono PCM16 WAV with stdlib wave (I/O) and torch (numeric conversion).
+
+    This avoids torchaudio>=2.9's optional TorchCodec runtime dependency;
+    phase feature extraction, GMM EM and scoring remain torch-only.
+    """
+    with wave.open(io.BytesIO(content), "rb") as recording:
+        channels = recording.getnchannels()
+        sample_width = recording.getsampwidth()
+        rate = recording.getframerate()
+        if channels != 1 or sample_width != 2:
+            raise ValueError("Expected uncompressed mono 16-bit PCM WAV")
+        samples = recording.readframes(recording.getnframes())
+    waveform = torch.frombuffer(bytearray(samples), dtype=torch.int16).float() / 32768.0
+    return waveform, rate
+
+
 _ID = re.compile(r"^[A-Za-z0-9_-]+$")
 _REQUIRED = (
     "background.csv", "dev_enrol.csv", "dev_trials.csv",
@@ -100,13 +117,13 @@ class KaggleData:
         if self.audio_zip.is_file():
             if self._zip is None:
                 self._zip = zipfile.ZipFile(self.audio_zip)
-            with self._zip.open(f"audio/{file_id}.wav") as f:
-                waveform, rate = torchaudio.load(io.BytesIO(f.read()))
+            content = self._zip.read(f"audio/{file_id}.wav")
         else:
-            waveform, rate = torchaudio.load(str(self.audio_dir / f"{file_id}.wav"))
-        if rate != 16000 or waveform.shape[0] != 1:
-            raise ValueError(f"Expected mono 16kHz: {file_id}, shape={waveform.shape}, rate={rate}")
-        return waveform.squeeze(0).float()
+            content = (self.audio_dir / f"{file_id}.wav").read_bytes()
+        waveform, rate = decode_pcm16_wav(content)
+        if rate != 16000:
+            raise ValueError(f"Expected mono 16kHz: {file_id}, rate={rate}")
+        return waveform
 
     def close(self) -> None:
         if self._zip is not None:
@@ -275,7 +292,7 @@ class GoogleResearchData:
         path = (self.root / file_id).resolve()
         if not path.is_relative_to(self.root):
             raise PermissionError("Path escape")
-        waveform, sr = torchaudio.load(str(path))
-        if sr != 16000 or waveform.shape[0] != 1:
+        waveform, sr = decode_pcm16_wav(path.read_bytes())
+        if sr != 16000:
             raise ValueError(f"Invalid research WAV: {file_id}")
-        return waveform.squeeze(0).float()
+        return waveform
