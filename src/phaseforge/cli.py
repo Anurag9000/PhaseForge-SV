@@ -9,6 +9,8 @@ from .data import KaggleData, google_benchmark, inventory_google
 from .engine import RunConfig, run
 from .experiments import fuse_saved_runs, sweep
 from .studies import gmm_behavior_study, run_proxy
+from .alternatives import run_alternative
+from .hmm import HMMConfig
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -39,6 +41,17 @@ def main(argv: list[str] | None = None) -> None:
     commands.choices["proxy"].add_argument("--rotations", type=int, default=4)
     commands.choices["proxy"].add_argument("--seed", type=int, default=2026)
     commands.choices["gmm-study"].add_argument("--seeds", type=int, default=20)
+    alt = commands.add_parser("run-alt", help="Run HMM, temporal GMM or phase-DTW research")
+    alt.add_argument("--data", required=True)
+    alt.add_argument("--config", required=True)
+    alt.add_argument("--output", required=True)
+    alt.add_argument("--method", choices=["hmm", "timebin", "dtw"], required=True)
+    alt.add_argument("--track", choices=["kaggle", "google"], default="kaggle")
+    alt.add_argument("--benchmark", default=None)
+    alt.add_argument("--ubm-words", choices=["stop", "all"], default="stop")
+    alt.add_argument("--states", type=int, default=4)
+    alt.add_argument("--state-mixtures", type=int, default=4)
+    alt.add_argument("--hmm-iters", type=int, default=10)
     fusion = commands.add_parser("fuse", help="Dev-fitted scale fusion across trained runs")
     fusion.add_argument("--runs", nargs="+", required=True)
     fusion.add_argument("--output", required=True)
@@ -76,6 +89,16 @@ def main(argv: list[str] | None = None) -> None:
             "covariance_models": len(study["covariance_study"]),
             "report": str(Path(args.output) / "gmm_behavior.json"),
         }, indent=2))
+    elif args.action == "run-alt":
+        cfg = RunConfig.from_dict(json.loads(Path(args.config).read_text()))
+        hmm_cfg = HMMConfig(states=args.states, mixtures_per_state=args.state_mixtures,
+                            iterations=args.hmm_iters)
+        result = run_alternative(
+            args.data, cfg, args.output, args.method, args.track,
+            args.benchmark, args.ubm_words, hmm_cfg,
+            args.states, args.state_mixtures,
+        )
+        print(json.dumps(result["metrics"], indent=2))
     elif args.action == "fuse":
         print(json.dumps(fuse_saved_runs(args.runs, args.output, args.weights,
                                         not args.no_eval), indent=2))
