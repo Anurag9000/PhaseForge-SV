@@ -181,3 +181,44 @@ def test_ensemble_first_full_kaggle_pipeline(tiny_kaggle):
     assert (output / "submission.csv").exists()
     assert len((output / "submission.csv").read_text().splitlines()) == 3
     assert result["metrics"]["eer"] >= 0
+
+
+
+def test_resume_heterogeneous_kaggle_suite(tiny_kaggle):
+    """Repeated identical jobs read the successful ledger, not rerun audio training."""
+    from phaseforge.suite import execute_suite
+    import json
+
+    settings = {
+        "feature": {"mode": "group", "bands": 8},
+        "em": {"mixtures": 2, "iterations": 3, "reg": 0.05, "chunk": 32},
+        "map": {"relevance": 4},
+        "score": {"norm": "none"},
+        "transform": "pca", "dimensions": 4, "seeds": [2026],
+        "save_model": False, "evaluate_eval": False,
+        "max_frames_per_background_file": 8, "device": "cpu",
+    }
+    config_file = tiny_kaggle / "single.json"
+    config_file.write_text(json.dumps(settings))
+    spec = {
+        "track": "kaggle",
+        "jobs": [{"id": "single", "kind": "gmm", "config": str(config_file)}]
+    }
+    output = tiny_kaggle / "runs" / "suite"
+    first = execute_suite(tiny_kaggle, spec, output)
+    assert first["completed"] == 1
+    assert first["failed"] == 0
+    assert len(first["development_ranking"]) == 1
+    path = output / "jobs" / "000_single" / "result.json"
+    timestamp = path.stat().st_mtime_ns
+    second = execute_suite(tiny_kaggle, spec, output)
+    assert second["completed"] == 1
+    assert path.stat().st_mtime_ns == timestamp
+    assert not (output / "jobs" / "000_single" / "submission.csv").exists()
+
+
+def test_research_corpus_refused_by_kaggle_suite():
+    from phaseforge.suite import execute_suite
+
+    with pytest.raises(ValueError, match="Kaggle-only"):
+        execute_suite("irrelevant", {"track":"google","jobs":[]}, "irrelevant")
