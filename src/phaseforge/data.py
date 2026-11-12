@@ -96,6 +96,39 @@ class KaggleData:
         self.eval_enrol_ids = frozenset(r["file_id"] for r in self.eval_enrol)
         self.dev_test_ids = frozenset(r["test_file"] for r in self.dev_trials)
         self.eval_test_ids = frozenset(r["test_file"] for r in self.eval_trials)
+        partitions = {
+            "background": self.background_ids, "dev_enrol": self.dev_enrol_ids,
+            "dev_test": self.dev_test_ids,
+            "eval_enrol": self.eval_enrol_ids, "eval_test": self.eval_test_ids,
+        }
+        for left, ids_a in partitions.items():
+            for right, ids_b in partitions.items():
+                if left >= right:
+                    continue
+                duplicate = ids_a & ids_b
+                if duplicate:
+                    raise ValueError(
+                        f"Competition audio file-ID overlap between {left} and {right}: "
+                        f"{sorted(duplicate)[:5]}"
+                    )
+        for prefix, trials, enrol in (
+            ("dev", self.dev_trials, self.dev_enrol),
+            ("eval", self.eval_trials, self.eval_enrol),
+        ):
+            enrolled = {r["speaker_id"] for r in enrol}
+            seen_ids = set()
+            for trial in trials:
+                if trial["claimed_id"] not in enrolled:
+                    raise ValueError(
+                        f"{prefix} trial claims speaker not enrolled: "
+                        f"{trial['claimed_id']}"
+                    )
+                tid = trial["trial_id"]
+                if tid in seen_ids:
+                    raise ValueError(f"Duplicate {prefix} trial ID: {tid}")
+                seen_ids.add(tid)
+                if prefix == "dev" and trial.get("label") not in ("0", "1"):
+                    raise ValueError(f"Invalid development trial label: {tid}")
         self.allowed_ids = (
             self.background_ids | self.dev_enrol_ids | self.eval_enrol_ids
             | self.dev_test_ids | self.eval_test_ids
