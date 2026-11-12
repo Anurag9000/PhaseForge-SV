@@ -104,6 +104,7 @@ class KaggleData:
             if not _ID.fullmatch(file_id):
                 raise ValueError(f"Unsafe audio file ID: {file_id!r}")
         self._zip: zipfile.ZipFile | None = None
+        self._zip_index: dict[str, str] | None = None
 
     def assert_background_only(self, ids: Iterable[str]) -> None:
         ids = set(ids)
@@ -111,13 +112,87 @@ class KaggleData:
         if extraneous:
             raise ValueError(f"Non-background training audio forbidden: {sorted(extraneous)[:4]}")
 
+    def _open_zip_index(self) -> dict[str, str]:
+        """Discover allowed WAVs by stable file ID, independent of ZIP subfolder layout."""
+        if self._zip_index is not None:
+            return self._zip_index
+        if self._zip is None:
+            self._zip = zipfile.ZipFile(self.audio_zip)
+        found = {}
+        for member in self._zip.infolist():
+            if member.is_dir() or not member.filename.lower().endswith(".wav"):
+                continue
+            ident = Path(member.filename).stem
+            if ident in self.allowed_ids:
+                if ident in found:
+                    raise ValueError(f"Duplicate archive WAV identifier: {ident}")
+                found[ident] = member.filename
+        missing = self.allowed_ids - found.keys()
+        if missing:
+            raise FileNotFoundError(
+                f"Competition archive missing {len(missing)} manifest WAVs: "
+                f"{sorted(missing)[:5]}"
+            )
+        self._zip_index = found
+        return found
+
+    def audit_audio(self, check_crc: bool = False) -> dict:
+        """Deep manifest/archive audit; checks all WAV headers and exact PCM hashes.
+
+        This audits structure and integrity, *not* independence from Google
+        Speech Commands, which may contain lightly perturbed source recordings.
+        """
+        entries = self._open_zip_index() if self.audio_zip.is_file() else None
+        hashes: dict[str, str] = {}
+        duplicates = []
+        formats = Counter()
+        min_frames = None
+        max_frames = 0
+        for ident in sorted(self.allowed_ids):
+            if entries is not None:
+                raw = self._zip.read(entries[ident])
+            else:
+                path = self.audio_dir / f"{ident}.wav"
+                if not path.is_file():
+                    raise FileNotFoundError(path)
+                raw = path.read_bytes()
+            with wave.open(io.BytesIO(raw), "rb") as wav:
+                shape = (wav.getframerate(), wav.getnchannels(), wav.getsampwidth())
+                frames = wav.getnframes()
+                if shape != (16000, 1, 2):
+                    raise ValueError(f"Invalid WAV format {ident}: {shape}")
+                pcm = wav.readframes(frames)
+            formats[str(shape)] += 1
+            min_frames = frames if min_frames is None else min(min_frames, frames)
+            max_frames = max(max_frames, frames)
+            digest = hashlib.sha256(pcm).hexdigest()
+            if digest in hashes:
+                duplicates.append({"file_id": ident, "other_file_id": hashes[digest]})
+            hashes.setdefault(digest, ident)
+        if check_crc and self._zip is not None:
+            failure = self._zip.testzip()
+            if failure:
+                raise ValueError(f"ZIP CRC check failed: {failure}")
+        return {
+            **self.summary(),
+            "audited_files": len(self.allowed_ids),
+            "exact_pcm_duplicate_pairs": duplicates,
+            "format_counts": dict(formats),
+            "min_frames": min_frames,
+            "max_frames": max_frames,
+            "zip_crc_verified": check_crc and self.audio_zip.is_file(),
+            "extra_archive_wavs": (
+                sum(member.filename.lower().endswith(".wav") for member in self._zip.infolist())
+                - len(entries)
+                if entries is not None else None
+            ),
+        }
+
     def load(self, file_id: str) -> torch.Tensor:
         if file_id not in self.allowed_ids:
             raise PermissionError("Audio ID is not in the Kaggle competition manifests")
         if self.audio_zip.is_file():
-            if self._zip is None:
-                self._zip = zipfile.ZipFile(self.audio_zip)
-            content = self._zip.read(f"audio/{file_id}.wav")
+            content = self._zip.read(self._open_zip_index()[file_id])
         else:
             content = (self.audio_dir / f"{file_id}.wav").read_bytes()
         waveform, rate = decode_pcm16_wav(content)
@@ -129,6 +204,7 @@ class KaggleData:
         if self._zip is not None:
             self._zip.close()
             self._zip = None
+            self._zip_index = None
 
     def __enter__(self) -> "KaggleData":
         return self

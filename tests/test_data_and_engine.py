@@ -113,3 +113,21 @@ def test_google_benchmark_stays_research_only(tmp_path):
     split = google_benchmark(dest / "google_manifest.csv", dest, seed=2026)
     assert split["research_only"]
     assert (dest / "google_test_trials.csv").exists()
+
+
+
+def test_zip_subfolder_layout_and_integrity_audit(tiny_kaggle):
+    archive = tiny_kaggle / "audio.zip"
+    with zipfile.ZipFile(archive) as source:
+        recordings = [(Path(item.filename).name, source.read(item))
+                      for item in source.infolist() if item.filename.endswith(".wav")]
+    with zipfile.ZipFile(archive, "w") as destination:
+        for name, pcm in recordings:
+            destination.writestr("repackaged/nested/" + name, pcm)
+    with KaggleData(tiny_kaggle) as data:
+        wave = data.load("dt0")
+        assert wave.numel() > 100
+        audit = data.audit_audio(check_crc=True)
+        assert audit["audited_files"] == len(data.allowed_ids)
+        assert audit["zip_crc_verified"]
+        assert audit["min_frames"] >= 2048

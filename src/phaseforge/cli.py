@@ -22,6 +22,8 @@ def main(argv: list[str] | None = None) -> None:
     commands = parser.add_subparsers(dest="action", required=True)
     audit = commands.add_parser("audit-kaggle", help="Check competition manifests and source boundaries")
     audit.add_argument("--data", required=True)
+    audit.add_argument("--deep", action="store_true", help="Validate each WAV and exact PCM hashes")
+    audit.add_argument("--crc", action="store_true", help="Also verify ZIP CRCs")
     inv = commands.add_parser("audit-google", help="Inventory original Google WAVs (research only)")
     inv.add_argument("--data", required=True)
     inv.add_argument("--output", required=True)
@@ -86,7 +88,7 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
     if args.action == "audit-kaggle":
         with KaggleData(args.data) as dataset:
-            print(json.dumps(dataset.summary(), indent=2))
+            print(json.dumps(dataset.audit_audio(args.crc) if args.deep else dataset.summary(), indent=2))
     elif args.action == "audit-google":
         print(json.dumps(inventory_google(args.data, args.output), indent=2))
     elif args.action == "split-google":
