@@ -238,7 +238,8 @@ class TorchGMM:
                 else self.mean_log_prob(X)
             )
             self.history.append(log_likelihood)
-            if len(self.history) >= 3:
+            minimum_history = 4 if c.legacy_pre_mstep_likelihood else 3
+            if len(self.history) >= minimum_history:
                 improvement = self.history[-1] - self.history[-2]
                 if abs(improvement) <= c.tolerance * max(1.0, abs(self.history[-2])):
                     break
