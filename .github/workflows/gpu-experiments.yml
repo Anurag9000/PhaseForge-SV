@@ -6,7 +6,7 @@ on:
         description: Experiment runner
         type: choice
         required: true
-        options: [run, sweep, optimize, proxy, gmm-study, run-alt, robustness, analyze]
+        options: [run, sweep, optimize, suite, proxy, gmm-study, run-alt, robustness, analyze]
         default: run
       track:
         description: Dataset track (Google is research only)
@@ -18,6 +18,10 @@ on:
         type: choice
         options: [hmm, timebin, dtw, scratch]
         default: hmm
+      max_suite_jobs:
+        description: Maximum suite jobs to execute (36 for full registry)
+        type: number
+        default: 3
       data_path:
         description: Existing dataset directory on self-hosted runner
         required: true
@@ -48,6 +52,7 @@ jobs:
           EXPERIMENT_CONFIG: ${{ inputs.config_path }}
           RESEARCH_BENCHMARK: ${{ inputs.benchmark_path }}
           JOB_IDENTIFIER: ${{ github.run_id }}
+          SUITE_JOB_LIMIT: ${{ inputs.max_suite_jobs }}
         shell: bash
         run: |
           set -euo pipefail
@@ -65,6 +70,7 @@ jobs:
             proxy) test "$SOURCE_TRACK" = kaggle; python -m phaseforge.cli proxy --data "$SOURCE_DATA_PATH" --config "$EXPERIMENT_CONFIG" --output "$OUTPUT" ;;
             gmm-study) test "$SOURCE_TRACK" = kaggle; python -m phaseforge.cli gmm-study --data "$SOURCE_DATA_PATH" --config "$EXPERIMENT_CONFIG" --output "$OUTPUT" --seeds 20 ;;
             optimize) test "$SOURCE_TRACK" = kaggle; python -m phaseforge.cli optimize --data "$SOURCE_DATA_PATH" --config "$EXPERIMENT_CONFIG" --output "$OUTPUT" ;;
+            suite) test "$SOURCE_TRACK" = kaggle; python -m phaseforge.cli suite --data "$SOURCE_DATA_PATH" --config "$EXPERIMENT_CONFIG" --output "$OUTPUT" --max-jobs "$SUITE_JOB_LIMIT" ;;
             robustness) test "$SOURCE_TRACK" = kaggle; python -m phaseforge.cli robustness --data "$SOURCE_DATA_PATH" --run runs/baseline --output "$OUTPUT" ;;
             analyze) python -m phaseforge.cli analyze --scores runs/baseline/development_scores.csv --output "$OUTPUT" ;;
             *) echo 'Invalid experiment'; exit 1 ;;
