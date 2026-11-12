@@ -267,12 +267,24 @@ def inventory_google(root: str | Path, out_dir: str | Path) -> dict:
         raise RuntimeError("No Google Speech Commands utterances found")
     fields = list(records[0])
     write_csv(out_dir / "google_manifest.csv", records, fields)
+    distinct_stops = Counter(
+        x["speaker_id"] for x in records
+        if x["word"] == "stop" and not x["exact_duplicate"]
+    )
     summary = {
         "recordings": len(records),
         "exact_duplicates": sum(x["exact_duplicate"] for x in records),
         "unique_speakers": len({x["speaker_id"] for x in records}),
         "unique_words": dict(Counter(x["word"] for x in records if not x["exact_duplicate"])),
         "sample_rates": dict(Counter(x["sample_rate"] for x in records)),
+        "stop_takes_per_speaker": dict(sorted(
+            Counter(distinct_stops.values()).items()
+        )),
+        "eligible_stop_speakers_by_take_protocol": {
+            f"{enrol}_enrol_{test}_test":
+                sum(count >= enrol + test for count in distinct_stops.values())
+            for enrol, test in ((1, 1), (2, 1), (3, 1), (3, 2))
+        },
     }
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "google_inventory.json").write_text(json.dumps(summary, indent=2))
@@ -295,6 +307,25 @@ def google_benchmark(
         raise ValueError("Require 1-3 enrolment takes and at least one heldout take")
     if negatives_per_test < 1 or minimum_targets < 5:
         raise ValueError("Require impostor count >0 and at least five target speakers")
+    manifest_sha256 = hashlib.sha256(Path(manifest_file).read_bytes()).hexdigest()
+    locked = Path(output) / "google_benchmark.json"
+    if locked.exists():
+        previous = json.loads(locked.read_text())
+        expected = {
+            "seed": seed,
+            "enrolment_takes_per_speaker": target_enrol,
+            "genuine_test_takes_per_speaker": target_test,
+            "wrong_enrolled_claims_per_test": negatives_per_test,
+            "minimum_target_speakers": minimum_targets,
+        "source_manifest_sha256": manifest_sha256,
+            "source_manifest_sha256": manifest_sha256,
+        }
+        if any(previous.get(k) != v for k, v in expected.items()):
+            raise PermissionError(
+                "Locked Google benchmark already exists with different speaker "
+                "partition, trial protocol or source manifest; use a new output "
+                "directory instead of overwriting the held-out population."
+            )
     manifest = [
         r for r in read_csv(manifest_file)
         if r["exact_duplicate"] == "0" and r["sample_rate"] == "16000"
