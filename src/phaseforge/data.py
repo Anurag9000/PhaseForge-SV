@@ -230,12 +230,20 @@ def google_benchmark(
     rng = random.Random(seed)
     rng.shuffle(eligible)
     a, b = int(len(eligible) * 0.7), int(len(eligible) * 0.85)
-    eligible_set = set(eligible)
-    split = {speaker: "background" for speaker in by_all}
-    for speaker in eligible[a:b]:
-        split[speaker] = "dev"
-    for speaker in eligible[b:]:
-        split[speaker] = "test"
+    # Split eligible enrolled speakers and low-take/unknown speakers separately.
+    # Every word from a given original speaker remains in exactly one partition.
+    leftovers = sorted(set(by_all) - set(eligible))
+    rng.shuffle(leftovers)
+    split = {}
+    for population in (eligible, leftovers):
+        end_bg = int(len(population) * .70)
+        end_dev = int(len(population) * .85)
+        for speaker in population[:end_bg]:
+            split[speaker] = "background"
+        for speaker in population[end_bg:end_dev]:
+            split[speaker] = "dev"
+        for speaker in population[end_dev:]:
+            split[speaker] = "test"
     output = Path(output)
     write_csv(output / "google_speaker_splits.csv",
               [{"speaker_id": k, "split": v} for k, v in sorted(split.items())],
@@ -261,8 +269,18 @@ def google_benchmark(
                 for claimed in rng.sample([s for s in targets if s != speaker],
                                           min(negatives_per_test, len(targets) - 1)):
                     trials.append({"claimed_id": claimed, "test_file": audio, "label": 0})
-        # Unenrolled stop speakers from this partition are possible only when fewer than
-        # the required number of takes exist. They are deliberately not used here.
+        # Include actual unseen impostors whose speakers have no enrolment model.
+        unknown_audio = [
+            file for speaker in sorted(by_all)
+            if split[speaker] == partition and speaker not in targets
+            for file in sorted(by_stop.get(speaker, []))[:2]
+        ]
+        rng.shuffle(unknown_audio)
+        genuine_count = len(targets) * target_test
+        needed_files = (5 * genuine_count + 3) // 4
+        for test_file in unknown_audio[:needed_files]:
+            for claimed in rng.sample(targets, min(4, len(targets))):
+                trials.append({"claimed_id": claimed, "test_file": test_file, "label": 0})
         rng.shuffle(trials)
         for i, row in enumerate(trials):
             row["trial_id"] = f"{partition}_{i:08d}"
