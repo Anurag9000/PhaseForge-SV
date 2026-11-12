@@ -13,6 +13,7 @@ from .studies import gmm_behavior_study, run_proxy
 from .alternatives import run_alternative
 from .hmm import HMMConfig
 from .finalize import finalize_kaggle
+from .robustness import run_robustness
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -71,6 +72,11 @@ def main(argv: list[str] | None = None) -> None:
     fin.add_argument("--runs", nargs="+", required=True)
     fin.add_argument("--output", required=True)
     fin.add_argument("--weights", nargs="+", type=float)
+    robust = commands.add_parser("robustness", help="Probe a frozen Kaggle UBM against perturbed development WAVs")
+    robust.add_argument("--data", required=True)
+    robust.add_argument("--run", required=True)
+    robust.add_argument("--output", required=True)
+    robust.add_argument("--seed", type=int)
     args = parser.parse_args(argv)
     if args.action == "audit-kaggle":
         with KaggleData(args.data) as dataset:
@@ -128,6 +134,9 @@ def main(argv: list[str] | None = None) -> None:
     elif args.action == "fuse":
         print(json.dumps(fuse_saved_runs(args.runs, args.output, args.weights,
                                         not args.no_eval), indent=2))
+    elif args.action == "robustness":
+        result = run_robustness(args.data, args.run, args.output, args.seed)
+        print(json.dumps(result["conditions"], indent=2))
     elif args.action == "finalize":
         outcome = finalize_kaggle(args.data, args.runs, args.output, args.weights)
         print(json.dumps(outcome["dev_metrics"], indent=2))
