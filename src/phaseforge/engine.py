@@ -51,6 +51,7 @@ class RunConfig:
     seeds: tuple[int, ...] = (2026, 3107, 4109, 5101, 6101)
     enrolment_size: int = 3
     max_frames_per_background_file: int = 32
+    background_sampling: str = "per_utterance"  # or speaker_balanced
     max_fit_transform_frames: int = 50000
     max_background_files: int | None = None
     evaluate_eval: bool = True
@@ -73,6 +74,7 @@ class RunConfig:
             seeds=tuple(data.get("seeds", [2026, 3107, 4109, 5101, 6101])),
             enrolment_size=int(data.get("enrolment_size", 3)),
             max_frames_per_background_file=int(data.get("max_frames_per_background_file", 32)),
+            background_sampling=data.get("background_sampling", "per_utterance"),
             max_fit_transform_frames=int(data.get("max_fit_transform_frames", 50000)),
             max_background_files=data.get("max_background_files"),
             evaluate_eval=bool(data.get("evaluate_eval", True)),
@@ -92,6 +94,8 @@ class RunConfig:
             raise ValueError("At least one seed and 1-3 enrolment utterances required")
         if self.max_frames_per_background_file < 1:
             raise ValueError("Frame cap must be >=1")
+        if self.background_sampling not in ("per_utterance", "speaker_balanced"):
+            raise ValueError("Unknown background sampling strategy")
 
 
 def _speaker_from_original_id(path: str) -> str:
@@ -152,14 +156,42 @@ def extract_features(
 def _background_frames(
     feature: dict[str, torch.Tensor], background_ids: list[str],
     max_per_file: int, device: torch.device,
+    speaker_by_file: dict[str, str] | None = None,
+    strategy: str = "per_utterance",
 ) -> torch.Tensor:
+    """Control UBM training-frame weights without changing its phase representation.
+
+    per_utterance: deterministic <=max_per_file frames for each recording.
+    speaker_balanced: equal total sampled frames per speaker, keeping the
+    approximate total training budget fixed (rare speakers may be resampled).
+    """
+    if strategy not in ("per_utterance", "speaker_balanced"):
+        raise ValueError("Unknown background sampling policy")
+    if strategy == "speaker_balanced":
+        if not speaker_by_file:
+            raise ValueError("Speaker-balanced sampling requires file speaker IDs")
+        grouped: dict[str, list[torch.Tensor]] = defaultdict(list)
+        for ident in background_ids:
+            grouped[speaker_by_file[ident]].append(feature[ident])
+        budget = len(background_ids) * max_per_file
+        quota = max(1, (budget + len(grouped) - 1) // len(grouped))
+        parts = []
+        for speaker in sorted(grouped):
+            frames = torch.cat(grouped[speaker], dim=0)
+            positions = torch.linspace(
+                0, len(frames) - 1, quota, device=frames.device
+            ).long()
+            parts.append(frames[positions])
+        return torch.cat(parts, dim=0).to(device)
     parts = []
     for ident in background_ids:
-        x = feature[ident]
-        count = min(len(x), max_per_file)
-        positions = torch.linspace(0, len(x) - 1, count).long()
-        parts.append(x[positions])
-    return torch.cat(parts).to(device)
+        frames = feature[ident]
+        count = min(len(frames), max_per_file)
+        positions = torch.linspace(
+            0, len(frames) - 1, count, device=frames.device
+        ).long()
+        parts.append(frames[positions])
+    return torch.cat(parts, dim=0).to(device)
 
 
 def _cohort(
@@ -286,8 +318,11 @@ def run(
         )
     del features
     transformed = {key: value.to(device) for key, value in transformed.items()}
-    pool = _background_frames(transformed, bg_ids,
-                              config.max_frames_per_background_file, device)
+    speaker_by_file = {row["file_id"]: row["speaker_id"] for row in bg}
+    pool = _background_frames(
+        transformed, bg_ids, config.max_frames_per_background_file, device,
+        speaker_by_file=speaker_by_file, strategy=config.background_sampling,
+    )
     labels = torch.tensor([int(row["label"]) for row in dev_trials], device="cpu")
     dev_per_seed, eval_per_seed, diagnostics = [], [], []
     for seed in config.seeds:
