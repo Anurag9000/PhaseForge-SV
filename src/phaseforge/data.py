@@ -192,7 +192,8 @@ class KaggleData:
         if file_id not in self.allowed_ids:
             raise PermissionError("Audio ID is not in the Kaggle competition manifests")
         if self.audio_zip.is_file():
-            content = self._zip.read(self._open_zip_index()[file_id])
+            member = self._open_zip_index()[file_id]
+            content = self._zip.read(member)
         else:
             content = (self.audio_dir / f"{file_id}.wav").read_bytes()
         waveform, rate = decode_pcm16_wav(content)
