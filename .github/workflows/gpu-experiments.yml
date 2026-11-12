@@ -1,0 +1,81 @@
+name: PhaseForge GPU research jobs (self-hosted)
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Experiment runner
+        type: choice
+        required: true
+        options: [run, sweep, optimize, proxy, gmm-study, run-alt, robustness, analyze]
+        default: run
+      track:
+        description: Dataset track (Google is research only)
+        type: choice
+        options: [kaggle, google]
+        default: kaggle
+      method:
+        description: run-alt method
+        type: choice
+        options: [hmm, timebin, dtw, scratch]
+        default: hmm
+      data_path:
+        description: Existing dataset directory on self-hosted runner
+        required: true
+      config_path:
+        description: Relative path to configuration
+        required: true
+        default: configs/kaggle_group.json
+      benchmark_path:
+        description: Google research benchmark directory
+        required: false
+        default: ''
+jobs:
+  train:
+    runs-on: [self-hosted, linux, gpu]
+    timeout-minutes: 360
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install package without changing runner CUDA torch
+        run: python -m pip install -e '.[dev]'
+      - name: Validate source and run experiment
+        env:
+          EXPERIMENT_MODE: ${{ inputs.mode }}
+          SOURCE_TRACK: ${{ inputs.track }}
+          ALTERNATIVE_METHOD: ${{ inputs.method }}
+          SOURCE_DATA_PATH: ${{ inputs.data_path }}
+          EXPERIMENT_CONFIG: ${{ inputs.config_path }}
+          RESEARCH_BENCHMARK: ${{ inputs.benchmark_path }}
+          JOB_IDENTIFIER: ${{ github.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUTPUT="runs/gpu-job-${JOB_IDENTIFIER}"
+          mkdir -p "$OUTPUT"
+          if [ "$SOURCE_TRACK" = kaggle ]; then
+            python -m phaseforge.cli audit-kaggle --data "$SOURCE_DATA_PATH"
+          else
+            test -n "$RESEARCH_BENCHMARK" || { echo 'Google benchmark missing'; exit 1; }
+          fi
+          case "$EXPERIMENT_MODE" in
+            run) python -m phaseforge.cli run --data "$SOURCE_DATA_PATH" --config "$EXPERIMENT_CONFIG" --output "$OUTPUT" --track "$SOURCE_TRACK" --benchmark "$RESEARCH_BENCHMARK" ;;
+            sweep) python -m phaseforge.cli sweep --data "$SOURCE_DATA_PATH" --config "$EXPERIMENT_CONFIG" --output "$OUTPUT" --track "$SOURCE_TRACK" --benchmark "$RESEARCH_BENCHMARK" ;;
+            run-alt) python -m phaseforge.cli run-alt --data "$SOURCE_DATA_PATH" --config "$EXPERIMENT_CONFIG" --output "$OUTPUT" --track "$SOURCE_TRACK" --benchmark "$RESEARCH_BENCHMARK" --method "$ALTERNATIVE_METHOD" ;;
+            proxy) test "$SOURCE_TRACK" = kaggle; python -m phaseforge.cli proxy --data "$SOURCE_DATA_PATH" --config "$EXPERIMENT_CONFIG" --output "$OUTPUT" ;;
+            gmm-study) test "$SOURCE_TRACK" = kaggle; python -m phaseforge.cli gmm-study --data "$SOURCE_DATA_PATH" --config "$EXPERIMENT_CONFIG" --output "$OUTPUT" --seeds 20 ;;
+            optimize) test "$SOURCE_TRACK" = kaggle; python -m phaseforge.cli optimize --data "$SOURCE_DATA_PATH" --config "$EXPERIMENT_CONFIG" --output "$OUTPUT" ;;
+            robustness) test "$SOURCE_TRACK" = kaggle; python -m phaseforge.cli robustness --data "$SOURCE_DATA_PATH" --run runs/baseline --output "$OUTPUT" ;;
+            analyze) python -m phaseforge.cli analyze --scores runs/baseline/development_scores.csv --output "$OUTPUT" ;;
+            *) echo 'Invalid experiment'; exit 1 ;;
+          esac
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phaseforge-results-${{ github.run_id }}
+          path: |
+            runs/gpu-job-*/**/*.json
+            runs/gpu-job-*/**/*.csv
+            runs/gpu-job-*/**/*.png
+          if-no-files-found: warn
+          retention-days: 30
