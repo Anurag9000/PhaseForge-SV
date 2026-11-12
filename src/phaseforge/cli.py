@@ -8,6 +8,7 @@ from pathlib import Path
 from .data import KaggleData, google_benchmark, inventory_google
 from .engine import RunConfig, run
 from .experiments import fuse_saved_runs, sweep
+from .studies import gmm_behavior_study, run_proxy
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -30,6 +31,14 @@ def main(argv: list[str] | None = None) -> None:
         p.add_argument("--track", choices=["kaggle", "google"], default="kaggle")
         p.add_argument("--benchmark", default=None)
         p.add_argument("--ubm-words", choices=["stop", "all"], default="stop")
+    for name in ("proxy", "gmm-study"):
+        p = commands.add_parser(name, help=f"Execute {name} on disjoint Kaggle background speakers")
+        p.add_argument("--data", required=True)
+        p.add_argument("--config", required=True)
+        p.add_argument("--output", required=True)
+    commands.choices["proxy"].add_argument("--rotations", type=int, default=4)
+    commands.choices["proxy"].add_argument("--seed", type=int, default=2026)
+    commands.choices["gmm-study"].add_argument("--seeds", type=int, default=20)
     fusion = commands.add_parser("fuse", help="Dev-fitted scale fusion across trained runs")
     fusion.add_argument("--runs", nargs="+", required=True)
     fusion.add_argument("--output", required=True)
@@ -53,6 +62,20 @@ def main(argv: list[str] | None = None) -> None:
         config = json.loads(Path(args.config).read_text())
         print(json.dumps(sweep(args.data, config, args.output,
                                args.track, args.benchmark), indent=2))
+    elif args.action == "proxy":
+        cfg = RunConfig.from_dict(json.loads(Path(args.config).read_text()))
+        print(json.dumps(run_proxy(args.data, cfg, args.output,
+                                   args.seed, args.rotations), indent=2))
+    elif args.action == "gmm-study":
+        cfg = RunConfig.from_dict(json.loads(Path(args.config).read_text()))
+        study = gmm_behavior_study(args.data, cfg, args.output, args.seeds)
+        print(json.dumps({
+            "fit_speakers": study["fit_background_speakers"],
+            "heldout_speakers": study["heldout_background_speakers"],
+            "init_fits": len(study["initialization_fits"]),
+            "covariance_models": len(study["covariance_study"]),
+            "report": str(Path(args.output) / "gmm_behavior.json"),
+        }, indent=2))
     elif args.action == "fuse":
         print(json.dumps(fuse_saved_runs(args.runs, args.output, args.weights,
                                         not args.no_eval), indent=2))
