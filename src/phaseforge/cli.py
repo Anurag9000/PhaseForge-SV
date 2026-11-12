@@ -33,6 +33,12 @@ def main(argv: list[str] | None = None) -> None:
     split.add_argument("--manifest", required=True)
     split.add_argument("--output", required=True)
     split.add_argument("--seed", type=int, default=2026)
+    split.add_argument("--target-enrol", type=int, default=1,
+                       help="Original stop takes per enrolled target (1-3)")
+    split.add_argument("--target-test", type=int, default=1,
+                       help="Distinct held-out stop takes per enrolled target")
+    split.add_argument("--wrong-claims", type=int, default=8)
+    split.add_argument("--minimum-targets", type=int, default=30)
     for name in ("run", "sweep"):
         p = commands.add_parser(name, help=f"Execute or resume {name}")
         p.add_argument("--data", required=True)
@@ -103,7 +109,12 @@ def main(argv: list[str] | None = None) -> None:
     elif args.action == "audit-google":
         print(json.dumps(inventory_google(args.data, args.output), indent=2))
     elif args.action == "split-google":
-        print(json.dumps(google_benchmark(args.manifest, args.output, args.seed), indent=2))
+        print(json.dumps(google_benchmark(
+            args.manifest, args.output, args.seed,
+            target_enrol=args.target_enrol, target_test=args.target_test,
+            negatives_per_test=args.wrong_claims,
+            minimum_targets=args.minimum_targets,
+        ), indent=2))
     elif args.action == "run":
         config = RunConfig.from_dict(json.loads(Path(args.config).read_text()))
         result = run(args.data, config, args.output, args.track, args.benchmark,
