@@ -1,0 +1,11 @@
+{
+  "feature": {"mode":"temporal","win":400,"hop":160,"n_fft":512,"bands":24,"vad_db":-30,
+              "normalization":"utterance","masked_mean":false,"delta":false},
+  "em": {"mixtures":16,"covariance":"diag","init":"kmeans","iterations":35,"reg":0.02},
+  "map": {"relevance":2.0,"adapt_variances":false,"adapt_weights":false},
+  "score": {"norm":"s","cohort_speakers":32,"cohort_test_files":50,"smoothing":1},
+  "transform":"pca","dimensions":32,
+  "seeds":[2026,3107,4109,5101,6101],
+  "enrolment_size":3, "max_frames_per_background_file":32,
+  "evaluate_eval":true, "device":"auto"
+}

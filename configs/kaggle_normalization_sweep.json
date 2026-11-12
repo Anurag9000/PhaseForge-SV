@@ -1,0 +1,19 @@
+{
+  "base":{
+    "feature":{"mode":"group","win":400,"hop":160,"n_fft":512,"bands":24,
+               "normalization":"partial","masked_mean":true},
+    "em":{"mixtures":32,"covariance":"diag","init":"kmeans","iterations":35,"reg":0.02},
+    "map":{"relevance":0.5},"score":{"norm":"none"},
+    "transform":"pca","dimensions":24,"seeds":[2026],
+    "evaluate_eval":false
+  },
+  "grid":{
+    "feature.mode":["group","temporal"],
+    "feature.win":[400,640],
+    "feature.n_fft":[512,1024],
+    "feature.mean_strength":[0,0.5,1],
+    "feature.std_strength":[0,0.5,1],
+    "feature.masked_mean":[false,true]
+  },
+  "max_runs":144
+}
