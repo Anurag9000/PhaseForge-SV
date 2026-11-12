@@ -5,6 +5,8 @@ import copy
 import hashlib
 import itertools
 import json
+import math
+import random
 from dataclasses import asdict
 from pathlib import Path
 
@@ -24,16 +26,35 @@ def _deep_set(config: dict, dotted: str, value) -> None:
     node[keys[-1]] = value
 
 
-def expand_grid(space: dict) -> list[dict]:
-    """Full Cartesian experimental search; explicit max_runs caps execution."""
+def expand_grid(
+    space: dict, max_runs: int = 100, strategy: str = "random", seed: int = 2026,
+) -> list[dict]:
+    """Return at most max_runs configurations WITHOUT materializing enormous grids.
+
+    strategy=random samples the full Cartesian space reproducibly (better coverage
+    under a cap); strategy=grid runs lexicographically, useful for exhaustive
+    small grids. Every pair (parameter, value) is recorded in results.
+    """
     keys = sorted(space)
     values = [space[key] for key in keys]
     if any(not isinstance(v, list) or not v for v in values):
         raise ValueError("Grid entries must be nonempty lists")
-    return [
-        {key: value for key, value in zip(keys, variant)}
-        for variant in itertools.product(*values)
-    ]
+    if strategy not in ("random", "grid"):
+        raise ValueError("Unknown grid strategy")
+    total = math.prod(len(v) for v in values)
+    limit = min(int(max_runs), total)
+    if limit < 1:
+        raise ValueError("max_runs must be positive")
+    if strategy == "grid" or limit == total:
+        variants = itertools.islice(itertools.product(*values), limit)
+        return [dict(zip(keys, row)) for row in variants]
+    rng = random.Random(seed)
+    samples = set()
+    while len(samples) < limit:
+        samples.add(tuple(rng.randrange(len(options)) for options in values))
+    indices = sorted(samples)
+    return [dict(zip(keys, [values[j][index] for j, index in enumerate(row)]))
+            for row in indices]
 
 
 def sweep(
@@ -43,10 +64,12 @@ def sweep(
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
     baseline = sweep_config["base"]
-    combinations = expand_grid(sweep_config["grid"])
-    limit = int(sweep_config.get("max_runs", len(combinations)))
-    if limit < 1:
-        raise ValueError("max_runs must be positive")
+    combinations = expand_grid(
+        sweep_config["grid"], max_runs=int(sweep_config.get("max_runs", 100)),
+        strategy=sweep_config.get("strategy", "random"),
+        seed=int(sweep_config.get("seed", 2026)),
+    )
+    limit = len(combinations)
     records = []
     for i, combo in enumerate(combinations[:limit]):
         cfg = copy.deepcopy(baseline)
