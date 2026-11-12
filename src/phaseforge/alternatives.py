@@ -32,6 +32,13 @@ def _adapted_templates(
     grouped = defaultdict(list)
     for row in enrol:
         grouped[row["speaker_id"]].append(row)
+    insufficient = {speaker: len(rows) for speaker, rows in grouped.items()
+                    if len(rows) < k}
+    if insufficient:
+        raise ValueError(
+            f"Enrolment protocol requires {k} takes per target, "
+            f"but these targets have fewer: {insufficient}"
+        )
     return {
         speaker: [features[row["file_id"]]
                   for row in sorted(rows, key=lambda x: int(x["enrol_index"]))[:k]]
