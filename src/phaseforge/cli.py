@@ -14,6 +14,7 @@ from .alternatives import run_alternative
 from .hmm import HMMConfig
 from .finalize import finalize_kaggle
 from .robustness import run_robustness
+from .reporting import generate_report
 from .diagnostics import analyze_score_csv
 
 
@@ -85,6 +86,11 @@ def main(argv: list[str] | None = None) -> None:
     robust.add_argument("--run", required=True)
     robust.add_argument("--output", required=True)
     robust.add_argument("--seed", type=int)
+    rep = commands.add_parser("report", help="Create measured comparison report and figures")
+    rep.add_argument("--runs", nargs="+", required=True)
+    rep.add_argument("--output", required=True)
+    rep.add_argument("--gmm-study")
+    rep.add_argument("--bootstraps", type=int, default=250)
     args = parser.parse_args(argv)
     if args.action == "audit-kaggle":
         with KaggleData(args.data) as dataset:
@@ -145,6 +151,9 @@ def main(argv: list[str] | None = None) -> None:
     elif args.action == "analyze":
         result = analyze_score_csv(args.scores, args.output, args.target_far, args.compare)
         print(json.dumps(result, indent=2))
+    elif args.action == "report":
+        result = generate_report(args.runs, args.output, args.gmm_study, args.bootstraps)
+        print(json.dumps(result["comparison"], indent=2))
     elif args.action == "robustness":
         result = run_robustness(args.data, args.run, args.output, args.seed)
         print(json.dumps(result["conditions"], indent=2))
