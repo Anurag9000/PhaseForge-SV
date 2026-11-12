@@ -204,6 +204,7 @@ def _save_scores(path: Path, trials: list[dict], scores: torch.Tensor, labeled: 
 def run(
     root: str | Path, config: RunConfig, output: str | Path, track: str = "kaggle",
     benchmark: str | Path | None = None, ubm_word_pool: str = "stop",
+    manifests_override: dict | None = None,
 ) -> dict:
     """Train model(s), evaluate dev, optionally score eval; write deterministic artifacts."""
     config.validate()
@@ -226,10 +227,21 @@ def run(
         manifests = load_research_manifests(benchmark, ubm_word_pool)
     else:
         raise ValueError("track must be kaggle or google")
+    if manifests_override is not None:
+        if track != "kaggle":
+            raise ValueError("Background-only proxy override requires Kaggle track")
+        manifests = manifests_override
     bg, dev_enrol, dev_trials = (
         manifests["background"], manifests["dev_enrol"], manifests["dev_trials"]
     )
     eval_enrol, eval_trials = manifests["eval_enrol"], manifests["eval_trials"]
+    populations = [
+        {r["speaker_id"] for r in pool}
+        for pool in (bg, dev_enrol, eval_enrol)
+    ]
+    if (populations[0] & populations[1] or populations[0] & populations[2]
+            or populations[1] & populations[2]):
+        raise ValueError("Train/enrol speaker leakage in supplied experiment")
     bg_ids = list(dict.fromkeys(row["file_id"] for row in bg))
     if config.max_background_files is not None:
         rng = random.Random(2026)
