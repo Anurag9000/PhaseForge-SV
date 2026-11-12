@@ -103,7 +103,23 @@ def _speaker_from_original_id(path: str) -> str:
 
 
 def load_research_manifests(benchmark: str | Path, pool: str = "stop") -> dict:
+    """Load original-Google-only manifests with defensively verified speaker labels.
+
+    The metadata is the independent source of speaker identities. This ensures
+    impostor and genuine labels reflect original speaker IDs, not trial ordering
+    or a model prediction.
+    """
+    if pool not in ("stop", "all"):
+        raise ValueError("Google UBM word pool must be stop or all")
     benchmark = Path(benchmark)
+    protocol = json.loads((benchmark / "google_benchmark.json").read_text())
+    speakers = {r["speaker_id"]: r["split"] for r in read_csv(
+        benchmark / "google_speaker_splits.csv"
+    )}
+    original_files = {
+        r["file_id"]: r["speaker_id"]
+        for r in read_csv(benchmark / "google_manifest.csv")
+    }
     background = read_csv(benchmark / (
         "google_ubm_stop.csv" if pool == "stop" else "google_ubm_all_words.csv"
     ))
@@ -116,13 +132,59 @@ def load_research_manifests(benchmark: str | Path, pool: str = "stop") -> dict:
         "eval_enrol": read_csv(benchmark / "google_test_enrol.csv"),
         "eval_trials": read_csv(benchmark / "google_test_trials.csv"),
     }
-    a = {x["speaker_id"] for x in background}
-    b = {x["speaker_id"] for x in output["dev_enrol"]}
-    c = {x["speaker_id"] for x in output["eval_enrol"]}
-    if a & b or a & c or b & c:
-        raise ValueError("Research speaker leakage: splits intersect")
+    if not output["background"]:
+        raise ValueError("Google background UBM manifest is empty")
+    expected_enrol = int(protocol["enrolment_takes_per_speaker"])
+    expected_tests = int(protocol["genuine_test_takes_per_speaker"])
+    seen_enrol, seen_tests = set(), set()
+    for row in background:
+        path = row["file_id"]
+        if original_files.get(path) != row["speaker_id"]:
+            raise ValueError(f"UBM speaker/file attribution mismatch: {path}")
+        if speakers.get(row["speaker_id"]) != "background":
+            raise ValueError("Research UBM includes a held-out speaker")
+    for population, prefix in (("dev", "dev"), ("eval", "test")):
+        enrol = output[f"{population}_enrol"]
+        trials = output[f"{population}_trials"]
+        targets: dict[str, list[str]] = defaultdict(list)
+        for row in enrol:
+            speaker, file_id = row["speaker_id"], row["file_id"]
+            if speakers.get(speaker) != prefix or original_files.get(file_id) != speaker:
+                raise ValueError(f"{prefix} enrolment speaker/recording mismatch: {file_id}")
+            targets[speaker].append(file_id)
+            if file_id in seen_enrol:
+                raise ValueError(f"Duplicate enrolment recording across targets: {file_id}")
+            seen_enrol.add(file_id)
+        if not targets:
+            raise ValueError("No research speakers enrolled")
+        if any(len(files) != expected_enrol for files in targets.values()):
+            raise ValueError("Research enrolment file count contradicts protocol")
+        genuine_count = defaultdict(int)
+        trial_ids = set()
+        for row in trials:
+            trial_id = row["trial_id"]
+            if trial_id in trial_ids:
+                raise ValueError(f"Duplicate original Google trial ID: {trial_id}")
+            trial_ids.add(trial_id)
+            claimed, test_file = row["claimed_id"], row["test_file"]
+            if claimed not in targets:
+                raise ValueError(f"Claimed Google speaker has no enrolment: {claimed}")
+            actual = original_files.get(test_file)
+            if actual is None or speakers.get(actual) != prefix:
+                raise ValueError(f"Research test recording crosses speaker split: {test_file}")
+            if test_file in seen_enrol:
+                raise ValueError("Same recording appears in enrolment and test")
+            label = int(row["label"])
+            if label not in (0, 1) or label != int(claimed == actual):
+                raise ValueError(f"Research genuine/impostor label inconsistent: {trial_id}")
+            if label == 1:
+                genuine_count[claimed] += 1
+            seen_tests.add(test_file)
+        if any(genuine_count[speaker] != expected_tests for speaker in targets):
+            raise ValueError("Genuine research trial count differs from locked protocol")
+    if set(r["file_id"] for r in background) & (seen_enrol | seen_tests):
+        raise ValueError("UBM recording appears in research enrolment/test")
     return output
-
 
 def _cache_name(source: str, root: Path, ids: list[str], feature: FeatureConfig) -> str:
     spec = json.dumps({"source": source, "root": str(root), "ids": sorted(ids),
@@ -260,6 +322,15 @@ def run(
             raise ValueError("--benchmark mandatory for Google research")
         data = GoogleResearchData(root, Path(benchmark) / "google_manifest.csv")
         manifests = load_research_manifests(benchmark, ubm_word_pool)
+        research_protocol = json.loads(
+            (Path(benchmark) / "google_benchmark.json").read_text()
+        )
+        if config.enrolment_size != research_protocol["enrolment_takes_per_speaker"]:
+            raise ValueError(
+                "Google enrolment protocol mismatch: config requested "
+                f"{config.enrolment_size}, but benchmark uses "
+                f"{research_protocol['enrolment_takes_per_speaker']}"
+            )
     else:
         raise ValueError("track must be kaggle or google")
     if manifests_override is not None:
