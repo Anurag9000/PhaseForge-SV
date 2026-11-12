@@ -163,3 +163,42 @@ def fuse_saved_runs(
               "metrics": report(merged_dev, labels)}
     (output / "fusion.json").write_text(json.dumps(result, indent=2))
     return result
+
+
+def export_verified_kaggle_fusion(
+    fusion_directory: str | Path, competition_root: str | Path,
+) -> dict:
+    """Export only if every constituent model is a Kaggle-only competition run.
+
+    This NEVER uses the Google research corpus or four-claim postprocessing.
+    Its score is an independently computed phase GMM-UBM fusion.
+    """
+    from .data import KaggleData
+    fusion_directory = Path(fusion_directory)
+    metadata = json.loads((fusion_directory / "fusion.json").read_text())
+    with KaggleData(competition_root) as kaggle:
+        expected = [row["trial_id"] for row in kaggle.eval_trials]
+        for directory in metadata["runs"]:
+            result = json.loads((Path(directory) / "result.json").read_text())
+            if result["track"] != "kaggle" or result["research_only"]:
+                raise PermissionError("Research-track scores cannot enter Kaggle submission")
+            if not result["config"]["evaluate_eval"]:
+                raise PermissionError("Source run has no evaluation predictions")
+            if Path(result["source"]).resolve() != kaggle.root:
+                raise PermissionError("Fused source run uses a different dataset root")
+        rows = read_csv(fusion_directory / "evaluation_scores.csv")
+        observed = [row["trial_id"] for row in rows]
+        if observed != expected or len(set(observed)) != len(expected):
+            raise ValueError("Fused evaluation IDs do not match competition manifest")
+        if any(not math.isfinite(float(row["score"])) for row in rows):
+            raise ValueError("Nonfinite scores")
+        destination = fusion_directory / "submission.csv"
+        write_csv(destination, [
+            {"trial_id": row["trial_id"], "score": row["score"]} for row in rows
+        ], ["trial_id", "score"])
+        receipt = {
+            "kaggle_only": True, "trial_count": len(rows),
+            "sources": metadata["runs"], "destination": str(destination),
+        }
+        (fusion_directory / "submission_audit.json").write_text(json.dumps(receipt, indent=2))
+        return receipt
