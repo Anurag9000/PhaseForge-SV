@@ -153,3 +153,31 @@ def test_zip_subfolder_layout_and_integrity_audit(tiny_kaggle):
         assert audit["audited_files"] == len(data.allowed_ids)
         assert audit["zip_crc_verified"]
         assert audit["min_frames"] >= 2048
+
+
+
+def test_ensemble_first_full_kaggle_pipeline(tiny_kaggle):
+    """Two seeds and shared background cohorts must produce a valid Kaggle CSV."""
+    config = RunConfig.from_dict({
+        "feature": {"mode": "group", "bands": 8, "normalization": "utterance",
+                    "masked_mean": False},
+        "em": {"mixtures": 2, "iterations": 4, "chunk": 32, "reg": .05,
+               "init_subsample": 40, "kmeans_steps": 3,
+               "dead_policy": "hard_examples",
+               "init_variance_source": "initialization",
+               "legacy_pre_mstep_likelihood": True},
+        "map": {"relevance": .5},
+        "score": {"norm": "s", "norm_stage": "after_ensemble",
+                  "cohort_seed": 2026, "cohort_speakers": 2,
+                  "cohort_test_files": 2, "smoothing": 1},
+        "transform": "pca", "dimensions": 4,
+        "seeds": [12, 13], "evaluate_eval": True, "save_model": False,
+        "max_frames_per_background_file": 8, "device": "cpu",
+    })
+    output = tiny_kaggle / "runs" / "after_ensemble"
+    result = run(tiny_kaggle, config, output)
+    assert result["track"] == "kaggle"
+    assert result["config"]["score"]["norm_stage"] == "after_ensemble"
+    assert (output / "submission.csv").exists()
+    assert len((output / "submission.csv").read_text().splitlines()) == 3
+    assert result["metrics"]["eer"] >= 0
