@@ -21,6 +21,9 @@ class EMConfig:
     kmeans_steps: int = 12
     init_subsample: int = 25000
     dead_policy: str = "cyclic"  # cyclic or hard_examples
+    init_variance_source: str = "full"  # full or initialization
+    dead_weight_fraction: float = 0.05
+    legacy_pre_mstep_likelihood: bool = False
     chunk: int = 2048
     seed: int = 2026
 
@@ -35,6 +38,10 @@ class EMConfig:
             raise ValueError("Initialization subset must contain at least K frames")
         if self.dead_policy not in ("cyclic", "hard_examples"):
             raise ValueError("Unknown dead-component replacement policy")
+        if self.init_variance_source not in ("full", "initialization"):
+            raise ValueError("Invalid initial covariance population")
+        if not 0 < self.dead_weight_fraction <= 1:
+            raise ValueError("Dead component weight fraction must be in (0,1]")
 
 
 @dataclass(frozen=True)
@@ -88,7 +95,12 @@ class TorchGMM:
                 if torch.allclose(updated, means, atol=1e-4, rtol=1e-4):
                     break
                 means = updated
-        variance = X.var(0, unbiased=False).clamp_min(self.config.reg)
+        variance_population = (
+            subset if self.config.init_variance_source == "initialization" else X
+        )
+        variance = variance_population.var(0, unbiased=False).clamp_min(
+            self.config.reg
+        )
         if self.config.covariance == "diag":
             cov = variance[None].expand(K, -1).clone()
         elif self.config.covariance == "spherical":
@@ -176,6 +188,9 @@ class TorchGMM:
         self.history = []
         self.dead_components = []
         for iteration in range(c.iterations):
+            pre_update_ll = (
+                self.mean_log_prob(X) if c.legacy_pre_mstep_likelihood else None
+            )
             n, first, second, cross = self.sufficient_statistics(
                 X, with_full_second=(c.covariance == "full")
             )
@@ -214,11 +229,14 @@ class TorchGMM:
                     new_cov[dead] = floor.mean()
                 elif c.covariance == "full":
                     new_cov[dead] = torch.diag(floor)
-                n[dead] = max(c.min_occupancy, len(X) / (20 * K))
+                n[dead] = max(c.min_occupancy, len(X) / K * c.dead_weight_fraction)
             self.mu = new_mu
             self.cov = new_cov
             self.weights = n / n.sum()
-            log_likelihood = self.mean_log_prob(X)
+            log_likelihood = (
+                pre_update_ll if pre_update_ll is not None
+                else self.mean_log_prob(X)
+            )
             self.history.append(log_likelihood)
             if len(self.history) >= 3:
                 improvement = self.history[-1] - self.history[-2]
