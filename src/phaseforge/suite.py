@@ -156,10 +156,14 @@ def execute_suite(
 
     completed = [r for r in records if r["status"] == "complete"]
     eligible = [r for r in completed if r["kind"] == "gmm"]
-    ranking_key = lambda x: (
-        x.get("proxy_mean_eer", x["development_eer"]), x["development_eer"]
+    development_ranked = sorted(eligible, key=lambda x: x["development_eer"])
+    proxy_ranked = sorted(
+        (r for r in eligible if "proxy_mean_eer" in r),
+        key=lambda x: x["proxy_mean_eer"],
     )
-    ranked = sorted(eligible, key=ranking_key)
+    # Never rank a proxy EER against a development EER as if they came
+    # from the same population. Different validation protocols require
+    # separate leaderboards and paired comparisons.
     summary = {
         "track": "kaggle",
         "dataset": str(root),
@@ -168,12 +172,19 @@ def execute_suite(
         "git_revision": revision,
         "attempted": len(records), "completed": len(completed),
         "failed": len(records) - len(completed),
-        "selection": "speaker-excluded proxy EER if available; otherwise development EER",
-        "eligible_gmm_ranking": [
+        "selection": (
+            "Separate proxy and official development leaderboards. "
+            "Never compare their EER numbers as the same metric."
+        ),
+        "proxy_validated_ranking": [
             {"id": r["id"], "dev_eer": r["development_eer"],
-             "proxy_eer": r.get("proxy_mean_eer"),
-             "config": r["config"]}
-            for r in ranked
+             "proxy_eer": r["proxy_mean_eer"], "config": r["config"]}
+            for r in proxy_ranked
+        ],
+        "development_ranking": [
+            {"id": r["id"], "dev_eer": r["development_eer"],
+             "has_proxy": "proxy_mean_eer" in r, "config": r["config"]}
+            for r in development_ranked
         ],
         "other_research_methods": [
             {"id": r["id"], "dev_eer": r["development_eer"]}
