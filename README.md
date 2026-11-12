@@ -1,96 +1,69 @@
 # PhaseForge-SV
 
-**PyTorch-native research platform for phase-derived text-dependent speaker verification.**
+**An extensible, native-PyTorch research laboratory for phase-only, text-dependent speaker verification.**
 
-The project implements GMM-UBM speaker verification with controlled feature
-ablation, covariance/EM studies, MAP adaptation, score normalization,
-temporal verification models, phase-template DTW, learned background-only
-phase encoders, hyperparameter search, diagnostics, and reproducible reports.
+Two independent tracks are enforced: **Kaggle competition** (background-only UBM, designated enrolment only, phase-derived features, per-frame GMM-UBM log likelihood ratios) and **Google Speech Commands v0.02 research** (speaker-disjoint benchmark, separate trained models and saved results). **Never train a Kaggle submission on the original Google archive.**
 
-## Two isolated data tracks
+## Implemented model families
 
-- **Kaggle competition:** fit the UBM, PCA/ICA, learned phase encoders, and
-  score cohorts using only recordings listed in Kaggle background.csv.
-  Adapt speakers only from the corresponding dev/eval enrolment manifests.
-  The required baseline outputs a per-trial average speaker-versus-UBM
-  log-likelihood ratio. Google original recordings are prohibited as
-  additional Kaggle training data.
-- **Full Google Speech Commands v0.02:** research-only speaker-disjoint
-  verification, independent stop-only/all-word UBM comparison, and overlap
-  audits. Never export a Google-trained model as a Kaggle submission.
+| Family | Available configurations |
+|---|---|
+| Phase representation | Group/relative-phase, temporal phase and IFD, CosPhase/direct phase, phase-group cepstra, signed-power phase-only group-delay surrogate, LP-residual phase, all-pole phase, multi-resolution |
+| Signal processing | Energy VAD, masked circular aggregation, no/full/partial utterance CMVN, background-only global CMVN, PCA, whitened PCA, ICA, derivatives |
+| GMM background models | Native torch EM, diagonal/spherical/tied/full covariance, initialization and occupancy studies, mixture-size/relevance sweeps, speaker-balanced or utterance-balanced sampling |
+| Speaker models | Mean-only MAP (required baseline), optional variance/weight MAP, scratch GMM control, one/two/three enrolment recordings |
+| Scoring | Mean framewise LLR, smoothing, top-component approximate LLR, Z/T/S background cohort normalization, multi-seed/multi-stream fusion |
+| Alternatives | True left-to-right Baum-Welch HMM-UBM, time-binned GMM, phase-DTW; separately labeled experimental models |
+| Learned features | Supervised background-speaker phase-CNN and background-only contrastive phase-CNN feeding the GMM-UBM |
+| Experiments | Heldout background-speaker proxy, complete 20-seed GMM behavior study, finite search sweeps, stage-wise optimizer, optional Bayesian/TPE search, robustness perturbations |
+| Reporting | ROC/AUC, interpolated EER, FAR/FRR, grouped bootstrap, per-speaker failures, enrolled-vs-unknown impostor comparison, saved configurations and model checkpoints |
 
-## Install and validate
+## Install and test
 
-    python -m pip install -e ".[dev,plots]"
-    python -m pytest -q
-    python -m phaseforge.cli audit-kaggle --data /data/kaggle --deep --crc
+    pip install -e '.[dev]'
+    pytest -q
 
-The supplied Kaggle data directory needs its six CSV manifests plus audio.zip
-(or the extracted audio/ directory). The deep audit verifies every referenced
-PCM WAV, archive structure, duplicate PCM hashes and optional ZIP CRC.
+Install `pip install -e '.[search]'` only if using the optional Optuna Bayesian search. PyTorch and torchaudio must be installed with matching CPU or CUDA builds.
 
-## Reproduce the baseline and compare methods
+## Kaggle competition track
 
+The dataset directory must contain `background.csv`, `dev_enrol.csv`, `dev_trials.csv`, `eval_enrol.csv`, `eval_trials.csv`, `sample_submission.csv`, and `audio.zip` (or an `audio/` directory).
+
+    python -m phaseforge.cli audit-kaggle --data /data/kaggle
     python -m phaseforge.cli run --data /data/kaggle --config configs/kaggle_group.json --output runs/group
     python -m phaseforge.cli run --data /data/kaggle --config configs/kaggle_temporal.json --output runs/temporal
-    python -m phaseforge.cli fuse --runs runs/group runs/temporal --output runs/fusion
+    python -m phaseforge.cli finalize --data /data/kaggle --runs runs/group runs/temporal --output runs/final
 
-    python -m phaseforge.cli proxy --data /data/kaggle --config configs/kaggle_group.json --output runs/proxy
-    python -m phaseforge.cli gmm-study --data /data/kaggle --config configs/kaggle_group.json --output runs/gmm_study --seeds 20
+The `finalize` command verifies every constituent GMM run's Kaggle data origin, score/trial consistency, finite outputs and then creates a Kaggle-format `submission.csv` with a `provenance.json` audit. The exploratory HMM, DTW and four-claim-coupled scores are not silently eligible for this step.
 
-    python -m phaseforge.cli sweep --data /data/kaggle --config configs/kaggle_normalization_sweep.json --output runs/normalization
-    python -m phaseforge.cli optimize --data /data/kaggle --config configs/optimize_robust.json --output runs/robust_optimization
+## More experiments
 
+    python -m phaseforge.cli proxy --data /data/kaggle --config configs/kaggle_group.json --output runs/proxy --rotations 4
+    python -m phaseforge.cli gmm-study --data /data/kaggle --config configs/kaggle_group.json --output runs/gmm-study --seeds 20
+    python -m phaseforge.cli sweep --data /data/kaggle --config configs/kaggle_normalization_sweep.json --output runs/norm
+    python -m phaseforge.cli optimize --data /data/kaggle --config configs/optimize_stagewise.json --output runs/opt
+    python -m phaseforge.cli bayes --data /data/kaggle --config configs/bayesian_phase_search.json --output runs/bayes
     python -m phaseforge.cli run-alt --method hmm --data /data/kaggle --config configs/kaggle_group.json --output runs/hmm
-    python -m phaseforge.cli run-alt --method dtw --data /data/kaggle --config configs/kaggle_group.json --output runs/dtw
+    python -m phaseforge.cli run-alt --method scratch --data /data/kaggle --config configs/kaggle_group.json --output runs/scratch
+    python -m phaseforge.cli analyze --scores runs/group/development_scores.csv --output runs/analysis
 
-Other complete configurations include speaker-balanced UBM training,
-supervised/background-identity phase-CNN encoding and self-supervised
-contrastive phase-CNN encoding in configs/. All are trained from scratch
-on competition-permitted background recordings.
+Use `bash scripts/run_staged_suite.sh /data/kaggle runs/staged` for the predefined staged comparison.
 
-## Diagnostics and reproducible reporting
+## Full Google corpus research (strictly separate)
 
-    python -m phaseforge.cli analyze --scores runs/group/development_scores.csv --output runs/group_analysis
-    python -m phaseforge.cli robustness --data /data/kaggle --run runs/group --output runs/group_robustness
-    python -m phaseforge.cli report --runs runs/group runs/temporal --output runs/comparison --gmm-study runs/gmm_study/gmm_behavior.json
+    bash scripts/reassemble_google.sh /data/google_parts /data/google_extracted
+    bash scripts/run_google_research.sh /data/google_extracted runs/google
 
-The saved run JSON includes complete config, seeds, EM history,
-covariance/component statistics, device and code/dataset provenance.
-A report contains ROC curves, development EER/AUC comparisons,
-speaker-condition analysis and paired grouped-bootstrap intervals.
-Real training outputs are not supplied or claimed until a run completes.
+Original Google WAVs must never be committed. Exact hash mismatches do not guarantee Kaggle independence because competition files were renamed/lightly perturbed. Research results are **not** competition training data.
 
-## Finalize a Kaggle-only submission
+## Automated runners
 
-    python -m phaseforge.cli finalize --data /data/kaggle --runs runs/group --output runs/final
-    python -m phaseforge.cli finalize --data /data/kaggle --runs runs/group runs/temporal --output runs/fused_final
+- **Continuous integration:** `.github/workflows/ci.yml` runs synthetic torch/phase/speaker tests on each push.
+- **Kaggle-only manual runs:** `.github/workflows/kaggle-manual-experiments.yml` downloads only competition data with Actions secrets `KAGGLE_USERNAME` and `KAGGLE_KEY`; user must configure secrets and manually dispatch. The GitHub-hosted runner is CPU-only.
+- **GPU manual runs:** `.github/workflows/gpu-experiments.yml` requires a self-hosted Linux runner with the `gpu` label and dataset paths on that machine. It never commits audio.
 
-The finalizer refuses Google-trained and research-only models and checks
-trial IDs, data origin and finite scores before writing submission.csv.
-The original Google corpus can be evaluated only in the separate research track.
+See `docs/RUNBOOK.md`, `docs/PROTOCOL.md`, `docs/EXPERIMENTS.md` and `docs/REFERENCES.md` for complete reproducibility and scientific context.
 
-## GPU and Google corpus
+## Honest performance record
 
-The model trainer automatically uses CUDA when available. A manual
-Kaggle-only GitHub Actions workflow requires repository secrets
-KAGGLE_USERNAME and KAGGLE_KEY, or use the self-hosted GPU workflow.
-**Never commit raw audio or account credentials to this public repository.**
-
-For the six original Google archive parts, see
-scripts/reassemble_google.sh and scripts/run_google_research.sh.
-Keep that corpus outside the Kaggle data path and do not transfer its
-trained weights into competition submissions.
-
-## Status
-
-GitHub Actions validates the code using synthetic-audio unit/integration
-tests. **Passing CI is not evidence of improved real-data EER.**
-The previously reported 4.61% development EER is a historical result
-from another notebook; this repository has not yet reproduced or
-superseded that measurement on the real Kaggle corpus.
-
-Read [protocol](docs/PROTOCOL.md),
-[research experiment program](docs/EXPERIMENTS.md),
-[runbook](docs/RUNBOOK.md), and
-[references](docs/REFERENCES.md).
+The historical **4.61% development EER** was measured in a previous separate notebook, **not** a new run completed by PhaseForge. Passing synthetic CI does not establish new competition EER. A result is verified only once the selected real-data run has completed with saved model, predictions and metrics. Hidden Kaggle evaluation labels are not available for independent local EER measurement.
