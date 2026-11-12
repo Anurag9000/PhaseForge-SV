@@ -19,6 +19,8 @@ class EMConfig:
     reg: float = .02
     min_occupancy: float = 2.0
     kmeans_steps: int = 12
+    init_subsample: int = 25000
+    dead_policy: str = "cyclic"  # cyclic or hard_examples
     chunk: int = 2048
     seed: int = 2026
 
@@ -29,6 +31,10 @@ class EMConfig:
             raise ValueError("Invalid covariance")
         if self.init not in ("random", "kmeans"):
             raise ValueError("Invalid initializer")
+        if self.init_subsample < self.mixtures:
+            raise ValueError("Initialization subset must contain at least K frames")
+        if self.dead_policy not in ("cyclic", "hard_examples"):
+            raise ValueError("Unknown dead-component replacement policy")
 
 
 @dataclass(frozen=True)
@@ -63,12 +69,15 @@ class TorchGMM:
         if len(X) < K:
             raise ValueError("GMM has more components than training frames")
         generator = torch.Generator(device=X.device).manual_seed(self.config.seed)
-        choose = torch.randperm(len(X), generator=generator, device=X.device)[:K]
-        means = X[choose].clone()
+        init_count = min(len(X), self.config.init_subsample)
+        subset = X[
+            torch.linspace(0, len(X) - 1, init_count, device=X.device).long()
+        ]
+        choose = torch.randperm(
+            len(subset), generator=generator, device=X.device
+        )[:K]
+        means = subset[choose].clone()
         if self.config.init == "kmeans":
-            subset = X
-            if len(X) > 25000:
-                subset = X[torch.linspace(0, len(X) - 1, 25000, device=X.device).long()]
             for _ in range(self.config.kmeans_steps):
                 nearest = torch.cdist(subset, means).argmin(-1)
                 counts = torch.bincount(nearest, minlength=K).to(X.dtype)
@@ -190,7 +199,14 @@ class TorchGMM:
             self.dead_components.append(int(dead.sum()))
             if dead.any():
                 indices = torch.where(dead)[0]
-                replacements = X[(indices + iteration * 131) % len(X)]
+                if c.dead_policy == "hard_examples":
+                    # Match the earlier notebook's low-UBM-likelihood replacement,
+                    # rather than recycling arbitrary training frames.
+                    with torch.no_grad():
+                        hard = torch.argsort(self.log_prob(X))[:len(indices)]
+                        replacements = X[hard]
+                else:
+                    replacements = X[(indices + iteration * 131) % len(X)]
                 new_mu[dead] = replacements
                 if c.covariance == "diag":
                     new_cov[dead] = floor
