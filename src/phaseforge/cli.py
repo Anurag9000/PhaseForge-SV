@@ -9,6 +9,7 @@ from pathlib import Path
 from .data import KaggleData, google_benchmark, inventory_google
 from .engine import RunConfig, run
 from .experiments import fuse_saved_runs, sweep, export_verified_kaggle_fusion
+from .suite import execute_suite
 from .optimizer import adaptive_optimize
 from .bayes_search import bayesian_search
 from .studies import gmm_behavior_study, run_proxy
@@ -71,6 +72,12 @@ def main(argv: list[str] | None = None) -> None:
     alt.add_argument("--states", type=int, default=4)
     alt.add_argument("--state-mixtures", type=int, default=4)
     alt.add_argument("--hmm-iters", type=int, default=10)
+    suite = commands.add_parser("suite", help="Run or resume registered Kaggle-only model experiments")
+    suite.add_argument("--data", required=True)
+    suite.add_argument("--config", required=True)
+    suite.add_argument("--output", required=True)
+    suite.add_argument("--max-jobs", type=int, default=None,
+                       help="Execute first N jobs for staged compute validation")
     bayes = commands.add_parser("bayes", help="Resume Bayesian phase/GMM optimization")
     bayes.add_argument("--data", required=True)
     bayes.add_argument("--config", required=True)
@@ -158,6 +165,14 @@ def main(argv: list[str] | None = None) -> None:
             args.states, args.state_mixtures,
         )
         print(json.dumps(result["metrics"], indent=2))
+    elif args.action == "suite":
+        spec = json.loads(Path(args.config).read_text())
+        result = execute_suite(args.data, spec, args.output, args.max_jobs)
+        print(json.dumps({
+            "attempted": result["attempted"], "completed": result["completed"],
+            "failed": result["failed"],
+            "summary": str(Path(args.output) / "suite_summary.json"),
+        }, indent=2))
     elif args.action == "bayes":
         spec = json.loads(Path(args.config).read_text())
         result = bayesian_search(args.data, spec, args.output)
