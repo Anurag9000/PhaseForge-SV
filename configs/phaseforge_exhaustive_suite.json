@@ -1,0 +1,370 @@
+{
+  "track": "kaggle",
+  "description": "All jobs run on competition background + development ONLY; no Google archive, no eval trial scoring during model selection.",
+  "jobs": [
+    {
+      "id": "historical_group_5seed",
+      "kind": "gmm",
+      "config": "configs/historical_461_group.json",
+      "overrides": {},
+      "proxy": true,
+      "proxy_rotations": 1
+    },
+    {
+      "id": "historical_temporal_5seed",
+      "kind": "gmm",
+      "config": "configs/historical_461_temporal.json",
+      "overrides": {},
+      "proxy": true,
+      "proxy_rotations": 1
+    },
+    {
+      "id": "phase_group_baseline",
+      "kind": "gmm",
+      "config": "configs/kaggle_group.json",
+      "overrides": {
+        "score.norm": "none",
+        "seeds": [
+          2026,
+          3107,
+          4109
+        ]
+      },
+      "proxy": true,
+      "proxy_rotations": 1
+    },
+    {
+      "id": "phase_temporal_baseline",
+      "kind": "gmm",
+      "config": "configs/kaggle_temporal.json",
+      "overrides": {
+        "score.norm": "none",
+        "seeds": [
+          2026,
+          3107,
+          4109
+        ]
+      },
+      "proxy": true,
+      "proxy_rotations": 1
+    },
+    {
+      "id": "partial_cmvn_group",
+      "kind": "gmm",
+      "config": "configs/kaggle_group.json",
+      "overrides": {
+        "feature.normalization": "partial",
+        "feature.mean_strength": 0.5,
+        "feature.std_strength": 0.5,
+        "score.norm": "none"
+      }
+    },
+    {
+      "id": "partial_cmvn_temporal",
+      "kind": "gmm",
+      "config": "configs/kaggle_temporal.json",
+      "overrides": {
+        "feature.normalization": "partial",
+        "feature.mean_strength": 0.5,
+        "feature.std_strength": 0.5,
+        "score.norm": "none"
+      }
+    },
+    {
+      "id": "global_cmvn",
+      "kind": "gmm",
+      "config": "configs/kaggle_group.json",
+      "overrides": {
+        "transform": "global_pca",
+        "score.norm": "none"
+      }
+    },
+    {
+      "id": "background_pca_whiten",
+      "kind": "gmm",
+      "config": "configs/kaggle_group.json",
+      "overrides": {
+        "transform": "whiten",
+        "score.norm": "none"
+      }
+    },
+    {
+      "id": "background_fastica",
+      "kind": "gmm",
+      "config": "configs/kaggle_group.json",
+      "overrides": {
+        "transform": "ica",
+        "score.norm": "none"
+      }
+    },
+    {
+      "id": "group_cepstral_phase",
+      "kind": "gmm",
+      "config": "configs/kaggle_group.json",
+      "overrides": {
+        "feature.mode": "group_cepstrum",
+        "score.norm": "none"
+      }
+    },
+    {
+      "id": "signed_power_phase_delay",
+      "kind": "gmm",
+      "config": "configs/kaggle_group.json",
+      "overrides": {
+        "feature.mode": "modified_group_delay",
+        "score.norm": "none"
+      }
+    },
+    {
+      "id": "instantaneous_frequency_deviation",
+      "kind": "gmm",
+      "config": "configs/kaggle_group.json",
+      "overrides": {
+        "feature.mode": "ifd",
+        "score.norm": "none"
+      }
+    },
+    {
+      "id": "cosphase_direct",
+      "kind": "gmm",
+      "config": "configs/kaggle_group.json",
+      "overrides": {
+        "feature.mode": "cosphase",
+        "score.norm": "none"
+      }
+    },
+    {
+      "id": "linear_prediction_residual_phase",
+      "kind": "gmm",
+      "config": "configs/kaggle_group.json",
+      "overrides": {
+        "feature.mode": "lp_residual",
+        "score.norm": "none"
+      }
+    },
+    {
+      "id": "all_pole_phase",
+      "kind": "gmm",
+      "config": "configs/kaggle_group.json",
+      "overrides": {
+        "feature.mode": "all_pole",
+        "score.norm": "none"
+      }
+    },
+    {
+      "id": "multi_resolution_group_temporal",
+      "kind": "gmm",
+      "config": "configs/kaggle_group.json",
+      "overrides": {
+        "feature.mode": "multi",
+        "feature.multi_modes": [
+          "group",
+          "temporal"
+        ],
+        "feature.multi_windows": [
+          400,
+          640
+        ],
+        "score.norm": "none"
+      }
+    },
+    {
+      "id": "phase_derivative_features",
+      "kind": "gmm",
+      "config": "configs/kaggle_group.json",
+      "overrides": {
+        "feature.delta": true,
+        "score.norm": "none"
+      }
+    },
+    {
+      "id": "speaker_balanced_ubm",
+      "kind": "gmm",
+      "config": "configs/kaggle_speaker_balanced.json",
+      "overrides": {
+        "score.norm": "none"
+      },
+      "proxy": true,
+      "proxy_rotations": 1
+    },
+    {
+      "id": "map_variance_adaptation",
+      "kind": "gmm",
+      "config": "configs/kaggle_group.json",
+      "overrides": {
+        "map.adapt_variances": true,
+        "score.norm": "none"
+      }
+    },
+    {
+      "id": "map_weight_adaptation",
+      "kind": "gmm",
+      "config": "configs/kaggle_group.json",
+      "overrides": {
+        "map.adapt_weights": true,
+        "score.norm": "none"
+      }
+    },
+    {
+      "id": "map_mean_variance_weights",
+      "kind": "gmm",
+      "config": "configs/kaggle_group.json",
+      "overrides": {
+        "map.adapt_variances": true,
+        "map.adapt_weights": true,
+        "score.norm": "none"
+      }
+    },
+    {
+      "id": "one_enrolment",
+      "kind": "gmm",
+      "config": "configs/kaggle_group.json",
+      "overrides": {
+        "enrolment_size": 1,
+        "score.norm": "none"
+      }
+    },
+    {
+      "id": "two_enrolments",
+      "kind": "gmm",
+      "config": "configs/kaggle_group.json",
+      "overrides": {
+        "enrolment_size": 2,
+        "score.norm": "none"
+      }
+    },
+    {
+      "id": "full_covariance",
+      "kind": "gmm",
+      "config": "configs/kaggle_group.json",
+      "overrides": {
+        "em.covariance": "full",
+        "em.mixtures": 8,
+        "score.norm": "none"
+      }
+    },
+    {
+      "id": "tied_covariance",
+      "kind": "gmm",
+      "config": "configs/kaggle_group.json",
+      "overrides": {
+        "em.covariance": "tied",
+        "em.mixtures": 16,
+        "score.norm": "none"
+      }
+    },
+    {
+      "id": "spherical_covariance",
+      "kind": "gmm",
+      "config": "configs/kaggle_group.json",
+      "overrides": {
+        "em.covariance": "spherical",
+        "score.norm": "none"
+      }
+    },
+    {
+      "id": "large_mixture_128",
+      "kind": "gmm",
+      "config": "configs/kaggle_group.json",
+      "overrides": {
+        "em.mixtures": 128,
+        "score.norm": "none"
+      }
+    },
+    {
+      "id": "smoothed_llr_3",
+      "kind": "gmm",
+      "config": "configs/kaggle_group.json",
+      "overrides": {
+        "score.smoothing": 3,
+        "score.norm": "none"
+      }
+    },
+    {
+      "id": "z_norm",
+      "kind": "gmm",
+      "config": "configs/kaggle_group.json",
+      "overrides": {
+        "score.norm": "z"
+      }
+    },
+    {
+      "id": "t_norm",
+      "kind": "gmm",
+      "config": "configs/kaggle_group.json",
+      "overrides": {
+        "score.norm": "t"
+      }
+    },
+    {
+      "id": "speaker_classification_phase_cnn",
+      "kind": "gmm",
+      "config": "configs/kaggle_learned_phase_cnn.json",
+      "overrides": {
+        "score.norm": "none",
+        "seeds": [
+          2026
+        ]
+      }
+    },
+    {
+      "id": "contrastive_phase_cnn",
+      "kind": "gmm",
+      "config": "configs/kaggle_selfsup_phase_cnn.json",
+      "overrides": {
+        "score.norm": "none",
+        "seeds": [
+          2026
+        ]
+      }
+    },
+    {
+      "id": "baum_welch_hmm",
+      "kind": "alternative",
+      "config": "configs/kaggle_group.json",
+      "overrides": {
+        "seeds": [
+          2026
+        ],
+        "score.norm": "none"
+      },
+      "method": "hmm"
+    },
+    {
+      "id": "temporal_gmm",
+      "kind": "alternative",
+      "config": "configs/kaggle_group.json",
+      "overrides": {
+        "seeds": [
+          2026
+        ],
+        "score.norm": "none"
+      },
+      "method": "timebin"
+    },
+    {
+      "id": "phase_dtw",
+      "kind": "alternative",
+      "config": "configs/kaggle_group.json",
+      "overrides": {
+        "seeds": [
+          2026
+        ],
+        "score.norm": "none"
+      },
+      "method": "dtw"
+    },
+    {
+      "id": "independent_speaker_gmm",
+      "kind": "alternative",
+      "config": "configs/kaggle_group.json",
+      "overrides": {
+        "seeds": [
+          2026
+        ],
+        "score.norm": "none"
+      },
+      "method": "scratch"
+    }
+  ]
+}
