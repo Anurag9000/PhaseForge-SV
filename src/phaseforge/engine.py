@@ -381,7 +381,10 @@ def run(
         mean_eval = torch.stack(eval_per_seed).mean(0)
         if not torch.isfinite(mean_eval).all():
             raise FloatingPointError("Nonfinite evaluation predictions")
-        _save_scores(output / "evaluation_scores.csv", eval_trials, mean_eval, labeled=False)
+        _save_scores(
+            output / "evaluation_scores.csv", eval_trials, mean_eval,
+            labeled=(track == "google"),
+        )
         if track == "kaggle":
             # The required submission always contains just ID + unadjusted per-trial
             # GMM-UBM scoring (or permitted cohort normalization), no four-claim coupling.
@@ -391,6 +394,23 @@ def run(
                  for r, s in zip(eval_trials, mean_eval)],
                 ["trial_id", "score"],
             )
+    google_test_metrics = None
+    if track == "google" and config.evaluate_eval:
+        if not all("label" in r for r in eval_trials):
+            raise ValueError("Google research test trials must include genuine/impostor labels")
+        test_labels = torch.tensor([int(r["label"]) for r in eval_trials])
+        google_test_metrics = report(mean_eval, test_labels, config.target_far)
+        google_test_metrics["bootstrap_by_claimed_speaker"] = grouped_bootstrap(
+            eval_trials, mean_eval, group_key="claimed_id",
+        )
+        google_test_metrics["bootstrap_by_test_recording"] = grouped_bootstrap(
+            eval_trials, mean_eval, group_key="test_file",
+        )
+        # This test report is for one frozen candidate only. Never use these
+        # labels in a search objective or training/feature fitting.
+        (output / "locked_google_test_metrics.json").write_text(
+            json.dumps(google_test_metrics, indent=2)
+        )
     stats = report(mean_dev, labels, config.target_far)
     stats["bootstrap_by_claimed_speaker"] = grouped_bootstrap(
         dev_trials, mean_dev, group_key="claimed_id"
@@ -436,7 +456,9 @@ def run(
         "hardware": hardware,
         "git_revision": git_revision,
         "source_manifest_sha256": fingerprint.hexdigest(),
-        "config": config.to_dict(), "metrics": stats, "seed_diagnostics": diagnostics,
+        "config": config.to_dict(), "metrics": stats,
+        "locked_google_test_metrics": google_test_metrics,
+        "seed_diagnostics": diagnostics,
         "elapsed_seconds": time.perf_counter() - t0,
         "background_frames": len(pool), "background_utterances": len(bg_ids),
     }
