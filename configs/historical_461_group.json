@@ -1,0 +1,58 @@
+{
+  "feature": {
+    "mode": "group",
+    "win": 400,
+    "hop": 160,
+    "n_fft": 512,
+    "bands": 24,
+    "vad_db": -30,
+    "reliability": 0.0001,
+    "masked_mean": false,
+    "normalization": "utterance",
+    "delta": false
+  },
+  "em": {
+    "mixtures": 32,
+    "covariance": "diag",
+    "init": "kmeans",
+    "iterations": 35,
+    "tolerance": 0.0002,
+    "reg": 0.02,
+    "min_occupancy": 2,
+    "kmeans_steps": 10,
+    "init_subsample": 12000,
+    "dead_policy": "hard_examples",
+    "init_variance_source": "initialization",
+    "dead_weight_fraction": 0.1,
+    "legacy_pre_mstep_likelihood": true,
+    "chunk": 2048
+  },
+  "map": {
+    "relevance": 0.5,
+    "adapt_variances": false,
+    "adapt_weights": false
+  },
+  "score": {
+    "norm": "s",
+    "norm_stage": "after_ensemble",
+    "cohort_seed": 2026,
+    "cohort_speakers": 32,
+    "cohort_test_files": 50,
+    "smoothing": 1
+  },
+  "transform": "pca",
+  "dimensions": 24,
+  "seeds": [
+    2026,
+    3107,
+    4109,
+    5101,
+    6101
+  ],
+  "enrolment_size": 3,
+  "max_frames_per_background_file": 32,
+  "background_sampling": "per_utterance",
+  "evaluate_eval": true,
+  "save_model": true,
+  "device": "auto"
+}
