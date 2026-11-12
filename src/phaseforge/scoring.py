@@ -60,6 +60,11 @@ def enrolled_models(
         grouped[row["speaker_id"]].append(row)
     adapted = {}
     for speaker, rows in grouped.items():
+        if len(rows) < k:
+            raise ValueError(
+                f"Speaker {speaker!r} has {len(rows)} enrolment recordings; "
+                f"the experiment requested {k}. Refusing to silently change protocol."
+            )
         selection = sorted(rows, key=lambda row: int(row["enrol_index"]))[:k]
         frames = torch.cat([features[row["file_id"]] for row in selection])
         adapted[speaker] = ubm.adapt(frames, map_config)
