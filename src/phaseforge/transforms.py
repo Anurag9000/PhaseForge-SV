@@ -58,6 +58,37 @@ class ICA:
         return self.pca(x) @ self.W.T
 
 
+
+class BackgroundCMVN:
+    """Global mean/std normalization fitted ONLY on background feature frames."""
+
+    def __init__(self, min_std: float = .06):
+        if min_std <= 0:
+            raise ValueError("min_std must be positive")
+        self.min_std = min_std
+
+    def fit(self, background: torch.Tensor) -> "BackgroundCMVN":
+        if background.ndim != 2 or len(background) < 2:
+            raise ValueError("Global CMVN requires at least 2 background frames")
+        self.mean = background.mean(0)
+        self.std = background.std(0, unbiased=False).clamp_min(self.min_std)
+        return self
+
+    def __call__(self, features: torch.Tensor) -> torch.Tensor:
+        return (features - self.mean) / self.std
+
+
+class GlobalProjectedTransform:
+    """First apply background-only global CMVN, then fit PCA/ICA to its output."""
+
+    def __init__(self, global_norm: BackgroundCMVN, projection: PCA | ICA):
+        self.global_norm = global_norm
+        self.projection = projection
+
+    def __call__(self, features: torch.Tensor) -> torch.Tensor:
+        return self.projection(self.global_norm(features))
+
+
 def fit_background_transform(
     features: dict[str, torch.Tensor], background_ids: list[str],
     method: str, dim: int, max_frames: int = 50000,
@@ -77,6 +108,16 @@ def fit_background_transform(
         transform = PCA(dim, whiten=True).fit(X)
     elif method == "ica":
         transform = ICA(dim, seed=seed).fit(X)
+    elif method == "global":
+        transform = BackgroundCMVN().fit(X)
+    elif method in ("global_pca", "global_whiten", "global_ica"):
+        normalizer = BackgroundCMVN().fit(X)
+        whitened = normalizer(X)
+        if method == "global_ica":
+            projection = ICA(dim, seed=seed).fit(whitened)
+        else:
+            projection = PCA(dim, whiten=(method == "global_whiten")).fit(whitened)
+        transform = GlobalProjectedTransform(normalizer, projection)
     else:
         raise ValueError(method)
     return {ident: transform(x) for ident, x in features.items()}, transform
