@@ -1,9 +1,36 @@
 {
-  "feature":{"mode":"group","win":400,"hop":160,"n_fft":512,"bands":24,
-             "normalization":"partial","mean_strength":0.5,"std_strength":0.5},
-  "em":{"mixtures":32,"covariance":"diag","init":"kmeans","iterations":35,"reg":0.02},
-  "map":{"relevance":8},"score":{"norm":"none"},
-  "transform":"pca","dimensions":24,"seeds":[2026,3107,4109],
-  "enrolment_size":3,"max_frames_per_background_file":32,
-  "evaluate_eval":true,"device":"auto"
+  "feature": {
+    "mode": "group",
+    "win": 400,
+    "hop": 160,
+    "n_fft": 512,
+    "bands": 24,
+    "normalization": "partial",
+    "mean_strength": 0.5,
+    "std_strength": 0.5
+  },
+  "em": {
+    "mixtures": 32,
+    "covariance": "diag",
+    "init": "kmeans",
+    "iterations": 35,
+    "reg": 0.02
+  },
+  "map": {
+    "relevance": 8
+  },
+  "score": {
+    "norm": "none"
+  },
+  "transform": "pca",
+  "dimensions": 24,
+  "seeds": [
+    2026,
+    3107,
+    4109
+  ],
+  "enrolment_size": 1,
+  "max_frames_per_background_file": 32,
+  "evaluate_eval": true,
+  "device": "auto"
 }
