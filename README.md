@@ -67,3 +67,45 @@ See `docs/RUNBOOK.md`, `docs/PROTOCOL.md`, `docs/EXPERIMENTS.md` and `docs/REFER
 ## Honest performance record
 
 The historical **4.61% development EER** was measured in a previous separate notebook, **not** a new run completed by PhaseForge. Passing synthetic CI does not establish new competition EER. A result is verified only once the selected real-data run has completed with saved model, predictions and metrics. Hidden Kaggle evaluation labels are not available for independent local EER measurement.
+
+
+## Historical 4.61% notebook reproduction (not yet measured in this repo)
+
+The original 2026 notebook selected 32-component frequency/group-phase and
+16-component temporal-phase UBMs, with PCA dimensions 24/32, MAP relevance
+0.5/2, five GMM seeds and cohort S-normalization **after averaging seeds**.
+It initialized k-means on at most 12,000 background frames and used
+low-likelihood dead-component reinitialization. Separate compatible
+configurations preserve these choices:
+
+    bash scripts/reproduce_historical_best.sh /data/kaggle runs/historical
+
+No claim of exactly 4.61% EER can be made until this implementation is run
+on the original competition files and the resulting scores are audited.
+
+## Complete heterogeneous experiment suite (36 registered jobs)
+
+    python -m phaseforge.cli suite --data /data/kaggle --config configs/phaseforge_exhaustive_suite.json --output runs/registered --max-jobs 3
+    python -m phaseforge.cli suite --data /data/kaggle --config configs/phaseforge_exhaustive_suite.json --output runs/registered --max-jobs 36
+
+Each job uses only Kaggle background training and labelled development trials.
+No evaluation recordings are scored during suite model selection. Failed jobs
+and completed jobs have persistent ledgers; source revision and manifest
+fingerprints prevent reusing stale outcomes. Development and speaker-excluded
+proxy EER are reported in **separate** leaderboards.
+
+The self-hosted GPU workflow requires a persistent absolute `results_path`
+outside Git checkout; use the *same* path on subsequent dispatches to resume
+the 36-job suite. Hosted GitHub CPU runners remain useful for small isolated
+runs, not exhaustive GPU search.
+
+## Public Google speech research
+
+The manual `Original Google Speech Commands research` Actions workflow can
+download the official full 2.3 GB corpus, inventory it and run the research
+benchmark without Kaggle secrets. Its default CPU job caps background files
+to reduce runtime; set 0 to include all research background files when
+hardware capacity permits. This workflow **does not create a Kaggle model**.
+The original corpus has a different repeated-take distribution from the
+challenge; the 1-enrolment/1-heldout-take protocol must not be treated as the
+same experiment as Kaggle's 3-enrolment verification.
