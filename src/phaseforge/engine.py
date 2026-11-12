@@ -9,6 +9,7 @@ import hashlib
 import json
 import random
 import time
+import subprocess
 from collections import defaultdict
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
@@ -259,6 +260,9 @@ def run(
         ([r["file_id"] for r in eval_enrol] +
          [r["test_file"] for r in eval_trials] if config.evaluate_eval else [])
     ))
+    if device.type == "cuda":
+        torch.cuda.synchronize(device)
+        torch.cuda.reset_peak_memory_stats(device)
     t0 = time.perf_counter()
     features = extract_features(
         data, ids, config.feature, output.parent / ".phase_cache", device
@@ -359,11 +363,44 @@ def run(
     stats["bootstrap_by_test_recording"] = grouped_bootstrap(
         dev_trials, mean_dev, group_key="test_file"
     )
+    # Provenance is recorded from manifests, not model-fitting on trial recordings.
+    fingerprint = hashlib.sha256()
+    source_files = (
+        [Path(root) / x for x in ("background.csv", "dev_enrol.csv", "dev_trials.csv",
+                                  "eval_enrol.csv", "eval_trials.csv", "sample_submission.csv")]
+        if track == "kaggle" else
+        [Path(benchmark) / x for x in ("google_manifest.csv", "google_speaker_splits.csv")]
+    )
+    for item in source_files:
+        if item.is_file():
+            fingerprint.update(item.name.encode())
+            fingerprint.update(item.read_bytes())
+    try:
+        git_revision = subprocess.run(
+            ["git", "rev-parse", "HEAD"], check=True, capture_output=True,
+            text=True, timeout=5
+        ).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        git_revision = None
+    if device.type == "cuda":
+        torch.cuda.synchronize(device)
+    hardware = {
+        "cuda_available": torch.cuda.is_available(),
+        "selected_device": str(device),
+        "cuda_device_name": torch.cuda.get_device_name(device)
+                            if device.type == "cuda" else None,
+        "peak_cuda_allocated_bytes": torch.cuda.max_memory_allocated(device)
+                                     if device.type == "cuda" else None,
+        "torch_version": torch.__version__,
+    }
     result = {
         "track": track, "research_only": track == "google",
         "source": str(Path(root).resolve()),
         "benchmark": str(benchmark) if benchmark else None,
         "device": str(device), "torch_version": torch.__version__,
+        "hardware": hardware,
+        "git_revision": git_revision,
+        "source_manifest_sha256": fingerprint.hexdigest(),
         "config": config.to_dict(), "metrics": stats, "seed_diagnostics": diagnostics,
         "elapsed_seconds": time.perf_counter() - t0,
         "background_frames": len(pool), "background_utterances": len(bg_ids),
