@@ -281,15 +281,20 @@ def inventory_google(root: str | Path, out_dir: str | Path) -> dict:
 
 def google_benchmark(
     manifest_file: str | Path, output: str | Path, seed: int = 2026,
-    target_enrol: int = 3, target_test: int = 2, negatives_per_test: int = 8,
+    target_enrol: int = 1, target_test: int = 1, negatives_per_test: int = 8,
+    minimum_targets: int = 30,
 ) -> dict:
-    """Deterministic stop-only trials with disjoint speaker splits and locked test.
+    """Speaker-disjoint stop-only research verification with explicit take counts.
 
-    Requires at least five unique stop takes per target. Unused Google speakers join
-    the UBM population. No Kaggle data are used in this research construction.
+    Google recordings commonly have fewer repeated stop takes than the Kaggle
+    task. Default 1+1 permits broader speaker coverage; 2+1, 3+1 or 3+2 may
+    be specified explicitly when enough recordings exist. All evaluations
+    must report the chosen protocol. No Google data train Kaggle UBMs.
     """
-    if negatives_per_test < 1:
-        raise ValueError("Require at least one impostor claim per target test")
+    if not 1 <= target_enrol <= 3 or target_test < 1:
+        raise ValueError("Require 1-3 enrolment takes and at least one heldout take")
+    if negatives_per_test < 1 or minimum_targets < 5:
+        raise ValueError("Require impostor count >0 and at least five target speakers")
     manifest = [
         r for r in read_csv(manifest_file)
         if r["exact_duplicate"] == "0" and r["sample_rate"] == "16000"
@@ -302,11 +307,14 @@ def google_benchmark(
         if row["word"] == "stop":
             by_stop[row["speaker_id"]].append(row["file_id"])
     eligible = sorted(s for s, files in by_stop.items() if len(files) >= target_enrol + target_test)
-    if len(eligible) < 30:
-        raise ValueError("Not enough eligible stop speakers for a speaker-disjoint evaluation")
+    if len(eligible) < minimum_targets:
+        raise ValueError(
+            f"Only {len(eligible)} speakers have {target_enrol}+{target_test} "
+            f"distinct stop takes, below the required {minimum_targets}; "
+            "reduce enrol/test counts explicitly or inspect the inventory."
+        )
     rng = random.Random(seed)
     rng.shuffle(eligible)
-    a, b = int(len(eligible) * 0.7), int(len(eligible) * 0.85)
     # Split eligible enrolled speakers and low-take/unknown speakers separately.
     # Every word from a given original speaker remains in exactly one partition.
     leftovers = sorted(set(by_all) - set(eligible))
@@ -332,8 +340,17 @@ def google_benchmark(
             bg_stop.extend(by_stop.get(speaker, []))
     write_csv(output / "google_ubm_stop.csv", [{"file_id": f} for f in bg_stop], ["file_id"])
     write_csv(output / "google_ubm_all_words.csv", [{"file_id": f} for f in bg_all], ["file_id"])
-    summary = {"seed": seed, "eligible_stop_speakers": len(eligible), "ubm_stop": len(bg_stop),
-               "ubm_all_words": len(bg_all), "research_only": True}
+    summary = {
+        "seed": seed, "eligible_stop_speakers": len(eligible),
+        "enrolment_takes_per_speaker": target_enrol,
+        "genuine_test_takes_per_speaker": target_test,
+        "wrong_enrolled_claims_per_test": negatives_per_test,
+        "minimum_target_speakers": minimum_targets,
+        "background_speakers": sum(v == "background" for v in split.values()),
+        "ubm_stop": len(bg_stop), "ubm_all_words": len(bg_all),
+        "research_only": True,
+        "independent_from_kaggle": "not established: shared source corpus",
+    }
     for partition in ("dev", "test"):
         targets = sorted(s for s in eligible if split[s] == partition)
         enrol, trials = [], []
@@ -365,8 +382,13 @@ def google_benchmark(
                   ["speaker_id", "file_id", "enrol_index"])
         write_csv(output / f"google_{partition}_trials.csv", trials,
                   ["trial_id", "claimed_id", "test_file", "label"])
-        summary[partition] = {"target_speakers": len(targets), "trials": len(trials),
-                              "genuine": sum(x["label"] for x in trials)}
+        summary[partition] = {
+            "target_speakers": len(targets),
+            "trials": len(trials),
+            "genuine": sum(x["label"] for x in trials),
+            "impostor": sum(x["label"] == 0 for x in trials),
+            "unknown_source_impostor_recordings": min(len(unknown_audio), needed_files),
+        }
     (output / "google_benchmark.json").write_text(json.dumps(summary, indent=2))
     return summary
 
