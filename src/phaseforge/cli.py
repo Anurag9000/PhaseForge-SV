@@ -12,6 +12,7 @@ from .optimizer import adaptive_optimize
 from .studies import gmm_behavior_study, run_proxy
 from .alternatives import run_alternative
 from .hmm import HMMConfig
+from .finalize import finalize_kaggle
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -65,6 +66,11 @@ def main(argv: list[str] | None = None) -> None:
     fusion.add_argument("--output", required=True)
     fusion.add_argument("--weights", nargs="+", type=float)
     fusion.add_argument("--no-eval", action="store_true")
+    fin = commands.add_parser("finalize", help="Verify Kaggle-only GMM runs and export a compliant submission")
+    fin.add_argument("--data", required=True)
+    fin.add_argument("--runs", nargs="+", required=True)
+    fin.add_argument("--output", required=True)
+    fin.add_argument("--weights", nargs="+", type=float)
     args = parser.parse_args(argv)
     if args.action == "audit-kaggle":
         with KaggleData(args.data) as dataset:
@@ -122,6 +128,10 @@ def main(argv: list[str] | None = None) -> None:
     elif args.action == "fuse":
         print(json.dumps(fuse_saved_runs(args.runs, args.output, args.weights,
                                         not args.no_eval), indent=2))
+    elif args.action == "finalize":
+        outcome = finalize_kaggle(args.data, args.runs, args.output, args.weights)
+        print(json.dumps(outcome["dev_metrics"], indent=2))
+        print("Verified submission:", Path(args.output) / "submission.csv")
 
 
 if __name__ == "__main__":
