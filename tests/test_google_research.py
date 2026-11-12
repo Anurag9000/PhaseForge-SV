@@ -10,7 +10,7 @@ import wave
 import pytest
 
 from phaseforge.data import google_benchmark, inventory_google, read_csv
-from phaseforge.engine import RunConfig, run
+from phaseforge.engine import RunConfig, run, load_research_manifests
 from phaseforge.gmm import EMConfig, MAPConfig, TorchGMM
 from phaseforge.scoring import enrolled_models
 import torch
@@ -50,6 +50,13 @@ def test_speaker_disjoint_google_one_plus_one_produces_test_eer(tmp_path):
     )
     assert summary["research_only"] is True
     assert summary["enrolment_takes_per_speaker"] == 1
+    assert len(summary["source_manifest_sha256"]) == 64
+    # Held-out identities and trial protocol must not be silently replaced.
+    with pytest.raises(PermissionError, match="Locked Google benchmark"):
+        google_benchmark(
+            benchmark / "google_manifest.csv", benchmark,
+            seed=2027, target_enrol=1, target_test=1, minimum_targets=30,
+        )
     splits = read_csv(benchmark / "google_speaker_splits.csv")
     lookup = {x["speaker_id"]: x["split"] for x in splits}
     for partition in ("dev", "test"):
@@ -80,6 +87,17 @@ def test_speaker_disjoint_google_one_plus_one_produces_test_eer(tmp_path):
     assert "label" in saved[0] and "score" in saved[0]
     assert (output / "locked_google_test_metrics.json").is_file()
     assert not (output / "submission.csv").exists()
+    # A changed true-speaker label is detected before any other training.
+    dev_path = benchmark / "google_dev_trials.csv"
+    trials = read_csv(dev_path)
+    positive = next(r for r in trials if r["label"] == "1")
+    positive["label"] = "0"
+    with dev_path.open("w", newline="") as fp:
+        writer = csv.DictWriter(fp, fieldnames=list(trials[0]))
+        writer.writeheader()
+        writer.writerows(trials)
+    with pytest.raises(ValueError, match="inconsistent"):
+        load_research_manifests(benchmark)
 
 
 def test_enrolled_models_fail_on_fewer_takes():
