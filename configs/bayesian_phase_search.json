@@ -1,0 +1,31 @@
+{
+  "base": {
+    "feature": {"mode":"group","win":400,"hop":160,"n_fft":1024,
+                "bands":24,"normalization":"partial","mean_strength":0.5,
+                "std_strength":0.5,"masked_mean":true},
+    "em": {"mixtures":32,"covariance":"diag","init":"kmeans",
+           "iterations":35,"reg":0.02},
+    "map": {"relevance":4,"adapt_variances":false,"adapt_weights":false},
+    "score": {"norm":"none","smoothing":1},
+    "transform":"pca","dimensions":24,
+    "seeds":[2026,3107,4109],"enrolment_size":3,
+    "background_sampling":"per_utterance",
+    "evaluate_eval":false
+  },
+  "track":"kaggle",
+  "validation":"proxy",
+  "proxy_rotations":1,
+  "trials":40,
+  "seed":2026,
+  "space": {
+    "feature.mode": ["group","temporal","ifd","lp_residual","all_pole","cosphase"],
+    "feature.mean_strength": {"type":"float","low":0,"high":1,"step":0.25},
+    "feature.std_strength": {"type":"float","low":0,"high":1,"step":0.25},
+    "feature.masked_mean": [true,false],
+    "em.mixtures": [16,32,64,128],
+    "map.relevance": {"type":"float","low":0.5,"high":32,"log":true},
+    "transform": ["none","pca","whiten","ica","global","global_pca"],
+    "dimensions": [16,24,32],
+    "background_sampling": ["per_utterance","speaker_balanced"]
+  }
+}
