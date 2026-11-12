@@ -15,6 +15,8 @@ class ScoreConfig:
     smoothing: int = 1  # odd median window, 1=no smoothing
     top_components: int | None = None
     norm: str = "none"  # none / z / t / s
+    norm_stage: str = "per_seed"  # per_seed | after_ensemble
+    cohort_seed: int = 2026
     cohort_speakers: int = 32
     cohort_test_files: int = 50
 
@@ -23,6 +25,8 @@ class ScoreConfig:
             raise ValueError("Median smoothing window must be positive and odd")
         if self.norm not in ("none", "z", "t", "s"):
             raise ValueError("Unsupported score normalization")
+        if self.norm_stage not in ("per_seed", "after_ensemble"):
+            raise ValueError("Unknown score-normalization stage")
 
 
 @torch.no_grad()
@@ -140,6 +144,106 @@ def cohort_normalize(
         norm_scores.append(z if config.norm == "z" else t if config.norm == "t" else (z + t) / 2)
     return torch.stack(norm_scores)
 
+
+
+@torch.no_grad()
+def cohort_score_tables(
+    ubm: TorchGMM, feature: dict[str, torch.Tensor],
+    trials: list[dict], targets: dict[str, TorchGMM],
+    cohort: dict[str, TorchGMM], background_test_files: list[str],
+    config: ScoreConfig,
+) -> dict:
+    """Raw cohort LLR *matrices*, retaining per-seed samples for later averaging.
+
+    This is needed to reproduce the historical experiment: average the five
+    independent models' scores first, THEN estimate Z/T means and deviations.
+    Normalizing each seed before averaging is mathematically different.
+    """
+    config.validate()
+    if not cohort or not background_test_files:
+        raise ValueError("Cohort model and background score population required")
+    target_names = sorted(targets)
+    test_names = sorted({row["test_file"] for row in trials})
+    cohort_names = sorted(cohort)
+    background_files = sorted(background_test_files)
+    z = None
+    t = None
+    if config.norm in ("z", "s"):
+        z = torch.stack([
+            torch.stack([
+                likelihood_ratio(
+                    ubm, targets[name], feature[file],
+                    config.smoothing, config.top_components
+                ) for file in background_files
+            ]) for name in target_names
+        ]).double()
+    if config.norm in ("t", "s"):
+        t = torch.stack([
+            torch.stack([
+                likelihood_ratio(
+                    ubm, cohort[speaker], feature[file],
+                    config.smoothing, config.top_components
+                ) for speaker in cohort_names
+            ]) for file in test_names
+        ]).double()
+    return {
+        "target_names": target_names,
+        "test_names": test_names,
+        "cohort_names": cohort_names,
+        "background_files": background_files,
+        "z": z,
+        "t": t,
+    }
+
+
+@torch.no_grad()
+def ensemble_cohort_normalize(
+    trials: list[dict], mean_raw_scores: torch.Tensor,
+    seed_tables: list[dict], config: ScoreConfig,
+) -> torch.Tensor:
+    """Normalize ENSEMBLE-MEAN scores using ENSEMBLE-MEAN cohort matrices.
+
+    Historical 2026 notebook used sample standard deviations (unbiased=True).
+    This is an explicit reproducibility mode; regular per-seed normalization
+    remains available for separate ablations.
+    """
+    config.validate()
+    if config.norm == "none":
+        return mean_raw_scores
+    if not seed_tables:
+        raise ValueError("No per-seed cohort tables to average")
+    names = ("target_names", "test_names", "cohort_names", "background_files")
+    baseline = seed_tables[0]
+    if any(any(table[key] != baseline[key] for key in names) for table in seed_tables):
+        raise ValueError("Every seed must use the same background-only cohort population")
+    norm = {}
+    if config.norm in ("z", "s"):
+        scores = torch.stack([table["z"].cpu() for table in seed_tables]).mean(0)
+        norms = scores.std(1, unbiased=scores.shape[1] > 1).clamp_min(.03)
+        norm["z"] = {
+            name: (scores[i].mean(), norms[i])
+            for i, name in enumerate(baseline["target_names"])
+        }
+    if config.norm in ("t", "s"):
+        scores = torch.stack([table["t"].cpu() for table in seed_tables]).mean(0)
+        norms = scores.std(1, unbiased=scores.shape[1] > 1).clamp_min(.03)
+        norm["t"] = {
+            name: (scores[i].mean(), norms[i])
+            for i, name in enumerate(baseline["test_names"])
+        }
+    corrected = []
+    for row, score in zip(trials, mean_raw_scores.cpu().double()):
+        if config.norm in ("z", "s"):
+            mu, sd = norm["z"][row["claimed_id"]]
+            zscore = (score - mu) / sd
+        if config.norm in ("t", "s"):
+            mu, sd = norm["t"][row["test_file"]]
+            tscore = (score - mu) / sd
+        corrected.append(
+            zscore if config.norm == "z" else
+            tscore if config.norm == "t" else (zscore + tscore) / 2
+        )
+    return torch.stack(corrected)
 
 def fuse_streams(
     scores: list[torch.Tensor], development_scales: list[float] | None = None,
