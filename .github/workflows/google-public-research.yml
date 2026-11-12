@@ -1,0 +1,102 @@
+name: Original Google Speech Commands research (manual, research-only)
+on:
+  workflow_dispatch:
+    inputs:
+      enrol_takes:
+        description: Number of original stop recordings per enrolment speaker
+        type: choice
+        options: ['1', '2', '3']
+        default: '1'
+      test_takes:
+        description: Number of separate stop recordings for genuine testing
+        type: choice
+        options: ['1', '2']
+        default: '1'
+      word_pool:
+        description: UBM training word vocabulary (both research-only)
+        type: choice
+        options: [stop, all]
+        default: stop
+      max_background_files:
+        description: Limit original corpus background WAVs for CPU experiment (0=all)
+        type: number
+        default: 1200
+      component_count:
+        description: Torch GMM mixture components
+        type: choice
+        options: ['8', '16', '32']
+        default: '16'
+jobs:
+  original-google-research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install CPU PyTorch
+        run: |
+          python -m pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install -e '.[dev]'
+      - name: Download official original corpus (research-only, not competition data)
+        run: |
+          set -euo pipefail
+          mkdir -p data/google
+          curl --fail --location --retry 4 --retry-delay 10 --connect-timeout 30 --output /tmp/google_speech_commands_v0.02.tar.gz https://storage.googleapis.com/download.tensorflow.org/data/speech_commands_v0.02.tar.gz
+          gzip -t /tmp/google_speech_commands_v0.02.tar.gz
+          tar -xzf /tmp/google_speech_commands_v0.02.tar.gz -C data/google --no-same-owner --no-same-permissions
+          rm -f /tmp/google_speech_commands_v0.02.tar.gz
+      - name: Build original-speaker-disjoint stop verification benchmark
+        env:
+          ENROL: ${{ inputs.enrol_takes }}
+          GENUINE_TEST: ${{ inputs.test_takes }}
+        run: |
+          python -m phaseforge.cli audit-google --data data/google --output runs/google/benchmark
+          python -m phaseforge.cli split-google --manifest runs/google/benchmark/google_manifest.csv --output runs/google/benchmark --seed 2026 --target-enrol "$ENROL" --target-test "$GENUINE_TEST"
+      - name: Configure finite, explicitly research-only CPU run
+        env:
+          FILE_LIMIT: ${{ inputs.max_background_files }}
+          COMPONENTS: ${{ inputs.component_count }}
+          ENROL: ${{ inputs.enrol_takes }}
+        run: |
+          python - <<'PY'
+          import json,os
+          from pathlib import Path
+          config=json.loads(Path('configs/google_research_stop.json').read_text())
+          config['enrolment_size']=int(os.environ['ENROL'])
+          limit=int(os.environ['FILE_LIMIT'])
+          config['max_background_files']=limit if limit>0 else None
+          config['seeds']=[2026]
+          config['device']='cpu'
+          config['score']['norm']='none'
+          config['em']['mixtures']=int(os.environ['COMPONENTS'])
+          config['em']['iterations']=20
+          config['max_frames_per_background_file']=16
+          config['evaluate_eval']=True
+          config['save_model']=False
+          Path('runs/google/research_config.json').write_text(json.dumps(config,indent=2))
+          PY
+      - name: Train original-corpus research UBM and evaluate locked speakers
+        env:
+          WORD_POOL: ${{ inputs.word_pool }}
+        run: |
+          python -m phaseforge.cli run --data data/google --track google --benchmark runs/google/benchmark --config runs/google/research_config.json --output runs/google/measured --ubm-words "$WORD_POOL"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('runs/google/measured/result.json').read_text())
+          print('Research development EER:',d['metrics']['eer'])
+          print('Research held-out test EER:',d['locked_google_test_metrics']['eer'])
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: original-google-research-${{ github.run_id }}
+          path: |
+            runs/google/**/*.json
+            runs/google/**/*.csv
+          if-no-files-found: warn
+          retention-days: 14
