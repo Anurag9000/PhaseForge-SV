@@ -1,0 +1,67 @@
+name: Kaggle-only experiments (manual)
+on:
+  workflow_dispatch:
+    inputs:
+      experiment:
+        type: choice
+        required: true
+        default: group
+        options: [group, temporal, normalization, proxy, gmm-study, hmm, timebin, dtw]
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    permissions:
+      contents: read
+    env:
+      KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+      KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install PyTorch, project and Kaggle API
+        run: |
+          python -m pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install -e ".[dev]"
+          python -m pip install kaggle
+      - name: Require explicit Kaggle credentials
+        run: |
+          test -n "$KAGGLE_USERNAME" || (echo "Missing KAGGLE_USERNAME secret" && exit 1)
+          test -n "$KAGGLE_KEY" || (echo "Missing KAGGLE_KEY secret" && exit 1)
+      - name: Download ONLY the competition dataset
+        run: |
+          mkdir -p data/kaggle
+          kaggle competitions download -c who-said-stop-a-gmm-ubm-speaker-verification-competition -p data/kaggle
+          unzip -q data/kaggle/who-said-stop-a-gmm-ubm-speaker-verification-competition.zip -d data/kaggle
+          test -f data/kaggle/background.csv
+          test -f data/kaggle/audio.zip
+          python -m phaseforge.cli audit-kaggle --data data/kaggle
+      - name: Train selected experiment
+        env:
+          EXPERIMENT: ${{ inputs.experiment }}
+        run: |
+          case "$EXPERIMENT" in
+            group) python -m phaseforge.cli run --data data/kaggle --config configs/kaggle_group.json --output runs/group ;;
+            temporal) python -m phaseforge.cli run --data data/kaggle --config configs/kaggle_temporal.json --output runs/temporal ;;
+            normalization) python -m phaseforge.cli sweep --data data/kaggle --config configs/kaggle_normalization_sweep.json --output runs/normalization ;;
+            proxy) python -m phaseforge.cli proxy --data data/kaggle --config configs/kaggle_group.json --output runs/proxy ;;
+            gmm-study) python -m phaseforge.cli gmm-study --data data/kaggle --config configs/kaggle_group.json --output runs/gmm-study --seeds 20 ;;
+            hmm|timebin|dtw) python -m phaseforge.cli run-alt --data data/kaggle --config configs/kaggle_group.json --method "$EXPERIMENT" --output "runs/$EXPERIMENT" ;;
+            *) echo "Unknown experiment"; exit 1 ;;
+          esac
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phaseforge-${{ inputs.experiment }}-${{ github.run_id }}
+          path: |
+            runs/**/result.json
+            runs/**/development_scores.csv
+            runs/**/evaluation_scores.csv
+            runs/**/submission.csv
+            runs/**/gmm_behavior.json
+            runs/**/leaderboard.json
+            runs/**/proxy_summary.json
+          retention-days: 15
+          if-no-files-found: warn
