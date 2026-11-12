@@ -48,3 +48,22 @@ Bayesian/TPE hyperparameter optimization is available via optional Optuna
 (`pip install -e '.[search]'`) and `phaseforge bayes --data ... --config
 configs/bayesian_phase_search.json --output runs/bayesian`; validation defaults
 to background-speaker proxy EER, with SQLite-resumable study results.
+
+
+## Notebook reproduction and empirical job registry (added)
+
+The `historical_461_group.json` and `historical_461_temporal.json`
+configurations reproduce the earlier notebook's *intended* experiment
+structure: 32/16 mixture GMMs, PCA 24/32, r=0.5/2, group/temporal phase,
+background-only cohort seed 2026, five seeds, shared cohort tables averaged
+**before** S-normalization, 12,000-frame k-means init and hard-example resets.
+
+The `phaseforge_exhaustive_suite.json` registry defines 36 executable
+jobs spanning phase features, transformations, GMM covariance/mixture
+variants, MAP strategies, speaker-balanced sampling, temporal alternatives,
+and learned phase CNN encoders. A source-fingerprinted ledger supports
+staged runs and reexecution after changes. The suite never accesses eval
+recordings while comparing models.
+
+No new real-corpus EER is claimed until the relevant data-backed job
+completes and saves its score tables, validation protocol and run manifest.
