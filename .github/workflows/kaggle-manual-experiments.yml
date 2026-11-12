@@ -6,7 +6,7 @@ on:
         type: choice
         required: true
         default: group
-        options: [group, temporal, normalization, proxy, gmm-study, hmm, timebin, dtw]
+        options: [group, temporal, normalization, proxy, gmm-study, hmm, timebin, dtw, scratch]
 jobs:
   train:
     runs-on: ubuntu-latest
@@ -48,7 +48,7 @@ jobs:
             normalization) python -m phaseforge.cli sweep --data data/kaggle --config configs/kaggle_normalization_sweep.json --output runs/normalization ;;
             proxy) python -m phaseforge.cli proxy --data data/kaggle --config configs/kaggle_group.json --output runs/proxy ;;
             gmm-study) python -m phaseforge.cli gmm-study --data data/kaggle --config configs/kaggle_group.json --output runs/gmm-study --seeds 20 ;;
-            hmm|timebin|dtw) python -m phaseforge.cli run-alt --data data/kaggle --config configs/kaggle_group.json --method "$EXPERIMENT" --output "runs/$EXPERIMENT" ;;
+            hmm|timebin|dtw|scratch) python -m phaseforge.cli run-alt --data data/kaggle --config configs/kaggle_group.json --method "$EXPERIMENT" --output "runs/$EXPERIMENT" ;;
             *) echo "Unknown experiment"; exit 1 ;;
           esac
       - uses: actions/upload-artifact@v4
