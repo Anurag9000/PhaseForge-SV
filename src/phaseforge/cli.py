@@ -19,6 +19,11 @@ from .finalize import finalize_kaggle
 from .robustness import run_robustness
 from .reporting import generate_report
 from .diagnostics import analyze_score_csv
+from .new_neural_runner import NeuralRun, run_neural
+from .new_classical_runner import ClassicalRun, run_classical
+from .new_keyword import KeywordRun, run_keyword
+from .new_suite import execute_new_suite
+from .new_scoring import calibrate_saved_predictions
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -72,6 +77,33 @@ def main(argv: list[str] | None = None) -> None:
     alt.add_argument("--states", type=int, default=4)
     alt.add_argument("--state-mixtures", type=int, default=4)
     alt.add_argument("--hmm-iters", type=int, default=10)
+    new_suite = commands.add_parser(
+        "suite-new", help="Run/resume the new missing-methods research suite"
+    )
+    new_suite.add_argument("--data", required=True)
+    new_suite.add_argument("--config", default="configs/missing_research_suite.json")
+    new_suite.add_argument("--output", required=True)
+    new_suite.add_argument("--track", choices=["kaggle", "google"], default="kaggle")
+    new_suite.add_argument("--benchmark", default=None)
+    new_suite.add_argument("--max-jobs", type=int, default=None)
+    new_suite.add_argument("--strict", action="store_true")
+    for kind in ("neural", "classical", "keyword"):
+        command = commands.add_parser("run-" + kind,
+                                      help="Run an individual new research family")
+        command.add_argument("--data", required=True)
+        command.add_argument("--config", required=True)
+        command.add_argument("--output", required=True)
+        if kind == "keyword":
+            command.add_argument("--benchmark", required=True)
+        else:
+            command.add_argument("--track", choices=["kaggle", "google"], default="kaggle")
+            command.add_argument("--benchmark", default=None)
+    calibration = commands.add_parser("calibrate",
+                                      help="Group-held-out logistic calibration research")
+    calibration.add_argument("--development", required=True)
+    calibration.add_argument("--evaluation", default=None)
+    calibration.add_argument("--output", required=True)
+    calibration.add_argument("--folds", type=int, default=5)
     suite = commands.add_parser("suite", help="Run or resume registered Kaggle-only model experiments")
     suite.add_argument("--data", required=True)
     suite.add_argument("--config", required=True)
@@ -165,6 +197,34 @@ def main(argv: list[str] | None = None) -> None:
             args.states, args.state_mixtures,
         )
         print(json.dumps(result["metrics"], indent=2))
+    elif args.action == "suite-new":
+        manifest = json.loads(Path(args.config).read_text())
+        result = execute_new_suite(
+            args.data, manifest, args.output, args.track, args.benchmark,
+            args.max_jobs, args.strict,
+        )
+        print(json.dumps({
+            "attempted": result["attempted"], "completed": result["completed"],
+            "failed": result["failed"], "skipped_other_track": result["skipped_other_track"],
+            "leaderboard": str(Path(args.output) / "new_suite_summary.json"),
+        }, indent=2))
+    elif args.action == "run-neural":
+        config = NeuralRun.from_dict(json.loads(Path(args.config).read_text()))
+        result = run_neural(args.data, config, args.output, args.track, args.benchmark)
+        print(json.dumps(result["metrics"], indent=2))
+    elif args.action == "run-classical":
+        config = ClassicalRun.from_dict(json.loads(Path(args.config).read_text()))
+        result = run_classical(args.data, config, args.output, args.track, args.benchmark)
+        print(json.dumps(result["metrics"], indent=2))
+    elif args.action == "run-keyword":
+        config = KeywordRun.from_dict(json.loads(Path(args.config).read_text()))
+        result = run_keyword(args.data, args.benchmark, config, args.output)
+        print(json.dumps(result["metrics"], indent=2))
+    elif args.action == "calibrate":
+        result = calibrate_saved_predictions(
+            args.development, args.output, args.evaluation, args.folds
+        )
+        print(json.dumps(result, indent=2))
     elif args.action == "suite":
         spec = json.loads(Path(args.config).read_text())
         result = execute_suite(args.data, spec, args.output, args.max_jobs)
