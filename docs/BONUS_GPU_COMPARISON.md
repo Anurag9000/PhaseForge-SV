@@ -134,3 +134,36 @@ Replace the benchmark file path with runs/bonus/gpu_cuvs/bonus_results.json when
   hidden eval labels or cross-claim postprocessing in the Kaggle competition path.
 
 No bonus mark or top-50 rank can be guaranteed solely from a registered experiment. Real repeated CUDA results, a defensible optimization contribution and a reproducible submission are required.
+
+
+
+## Optional fourth comparator: IBM Flash-GMM Triton E-step
+
+Source: https://github.com/IBM/Flash-GMM. It provides the spherical-GMM
+flash_gmm_estep kernel returning frame log-likelihoods, occupancies,
+first moments and squared scatter around old means. **This is an E-step-only
+comparison, NOT a third-party GMM-UBM fit or speaker-verification EER.**
+It is separately implemented as bonus_flash_estep.py with no proprietary
+or third-party kernel code copied into PhaseForge.
+
+After installing Triton and its supported NVIDIA CUDA environment:
+
+    git clone https://github.com/IBM/Flash-GMM /path/to/Flash-GMM
+
+    python3 -m phaseforge.bonus_flash_estep \
+      --config configs/bonus_flash_estep.json \
+      --flash-source /path/to/Flash-GMM/flash_gmm.py \
+      --output runs/bonus/flash_estep --repeats 5
+
+The four cases cover 10,000–1,000,000 frames, K=32–1024 and
+D=24–128. Both implementations see **the same initialized spherical GMM**
+and same GPU tensors. This benchmark reports speed, peak PyTorch allocator,
+and logZ/Nk/first-moment/scatter discrepancies. Flash's BF16/TF32/Triton
+approximations may differ; the report exposes those discrepancies instead
+of demanding an unsupported exact equality. Do not put an E-step-only
+speedup into the full-EM or end-to-end performance column.
+
+cuVS current installation guidance:
+https://docs.nvidia.com/cuvs/installation — current source builds require
+CUDA Toolkit 12.9+ and Volta-class GPU (compute capability 7.0+). A
+complete cuVS native C++ library and headers are required for our adapter.
