@@ -59,6 +59,7 @@ class RunConfig:
     max_frames_per_background_file: int = 32
     background_sampling: str = "per_utterance"  # or speaker_balanced
     max_fit_transform_frames: int = 50000
+    feature_batch_size: int = 1
     max_background_files: int | None = None
     evaluate_eval: bool = True
     save_model: bool = True
@@ -82,6 +83,7 @@ class RunConfig:
             max_frames_per_background_file=int(data.get("max_frames_per_background_file", 32)),
             background_sampling=data.get("background_sampling", "per_utterance"),
             max_fit_transform_frames=int(data.get("max_fit_transform_frames", 50000)),
+            feature_batch_size=int(data.get("feature_batch_size", 1)),
             max_background_files=data.get("max_background_files"),
             evaluate_eval=bool(data.get("evaluate_eval", True)),
             save_model=bool(data.get("save_model", True)),
@@ -100,6 +102,8 @@ class RunConfig:
             raise ValueError("At least one seed and 1-3 enrolment utterances required")
         if self.max_frames_per_background_file < 1:
             raise ValueError("Frame cap must be >=1")
+        if self.feature_batch_size < 1:
+            raise ValueError("Feature extraction batch size must be >=1")
         if self.background_sampling not in ("per_utterance", "speaker_balanced"):
             raise ValueError("Unknown background sampling strategy")
 
@@ -248,7 +252,8 @@ def _cache_name(data, ids: list[str], feature: FeatureConfig) -> str:
 
 
 def extract_features(
-    data, ids: list[str], cfg: FeatureConfig, cache_root: Path, device: torch.device
+    data, ids: list[str], cfg: FeatureConfig, cache_root: Path, device: torch.device,
+    batch_size: int = 1,
 ) -> dict[str, torch.Tensor]:
     """Raw phase extraction only. Learned transforms are fitted later on background IDs."""
     cache_root.mkdir(parents=True, exist_ok=True)
@@ -265,14 +270,22 @@ def extract_features(
         except (OSError, EOFError, RuntimeError, ValueError,
                 zipfile.BadZipFile, pickle.UnpicklingError):
             print(f"Invalid phase cache {cache}; extracting again", flush=True)
-    extractor = PhaseExtractor(cfg)
-    features = {}
+    if batch_size < 1:
+        raise ValueError("Feature batch_size must be positive")
     with torch.no_grad():
-        for index, ident in enumerate(sorted(set(ids))):
-            y = data.load(ident).to(device)
-            features[ident] = extractor(y).cpu()
-            if index and index % 500 == 0:
-                print(f"Extracted {index}/{len(ids)} phase utterances", flush=True)
+        if batch_size > 1:
+            from .bonus_frontend import extract_grouped_features
+            features = extract_grouped_features(
+                data, sorted(set(ids)), cfg, device, batch_size,
+            )
+        else:
+            extractor = PhaseExtractor(cfg)
+            features = {}
+            for index, ident in enumerate(sorted(set(ids))):
+                y = data.load(ident).to(device)
+                features[ident] = extractor(y).cpu()
+                if index and index % 500 == 0:
+                    print(f"Extracted {index}/{len(ids)} phase utterances", flush=True)
     temporary = cache.with_suffix(".partial")
     torch.save(features, temporary)
     os.replace(temporary, cache)
@@ -439,7 +452,8 @@ def run(
     }
     stage_start = t0
     features = extract_features(
-        data, ids, config.feature, output.parent / ".phase_cache", device
+        data, ids, config.feature, output.parent / ".phase_cache", device,
+        batch_size=config.feature_batch_size,
     )
     data.close() if isinstance(data, KaggleData) else None
     if device.type == "cuda":
