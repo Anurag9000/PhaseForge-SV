@@ -138,3 +138,25 @@ phase-compatible ablations. Original MFCC/logmel references are Google-only.
 All new neural, classical, keyword and calibrated models are research-only;
 they do not produce eligible Kaggle GMM-UBM submissions. Registered jobs are
 not completed training runs; real EER is unknown until actual execution.
+
+
+## Bonus GPU GMM-UBM comparison and fully optimized end-to-end pipeline
+
+Both assignment bonuses now have dedicated code and methods:
+[docs/BONUS_GPU_COMPARISON.md](docs/BONUS_GPU_COMPARISON.md).
+Includes the actual CSOgroup TorchGMM 0.1.4 competitor, native cuVS C++ GMM
+adapter (requires independently installed NVIDIA cuVS SDK), identical
+parameters likelihood parity, robust fit/runtime/memory benchmark, phase-only
+batched STFT, fused EM and batched exact per-speaker GMM scoring.
+The end-to-end Kaggle development-only suite registers **35 bonus ablations**.
+
+    source .venv/bin/activate
+    python3 -m pip install -e '.[dev,bonus,plots,search]'
+    bash scripts/run_bonus_campaign.sh /data/kaggle runs/bonus smoke
+    bash scripts/run_bonus_campaign.sh /data/kaggle runs/bonus full
+
+CUDA is required for the full run; optional cuVS C++ binary must be
+compiled with a complete native C++ SDK. Real CPU TorchGMM/native
+measurements and fixed-parameter parity were executed in GitHub Actions,
+but CUDA and cuVS runtimes have not yet been measured in this repo.
+No new Kaggle EER improvement or guaranteed bonus mark is claimed.
