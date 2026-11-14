@@ -19,9 +19,13 @@ from .new_neural_runner import NeuralRun, run_neural
 from .new_classical_runner import ClassicalRun, run_classical
 from .new_keyword import KeywordRun, run_keyword
 from .new_scoring import calibrate_saved_predictions
+from .google_mathworks_reference import MathWorksResearch, run_google_mathworks
 
 
-ALLOWED = ("gmm_phase", "neural_sv", "classical_sv", "keyword_google", "calibrate")
+ALLOWED = (
+    "gmm_phase", "neural_sv", "classical_sv", "keyword_google",
+    "mathworks_reference", "calibrate",
+)
 
 
 def _sha256(obj: dict):
@@ -98,11 +102,11 @@ def execute_new_suite(
         kind = job.get("kind")
         if kind not in ALLOWED:
             raise ValueError(f"Unsupported research job type {kind}")
-        if kind == "keyword_google" and track != "google":
+        if kind in ("keyword_google", "mathworks_reference") and track != "google":
             # The new suite may contain a Google-only job. This is an explicit
             # skip, not a silent misuse of the competition dataset.
             record = {"id": job["id"], "status": "inapplicable",
-                      "reason": "keyword_google is original Google research only"}
+                      "reason": f"{kind} requires original Google research"}
             entries.append(record)
             continue
         if job.get("tracks") and track not in job["tracks"]:
@@ -118,7 +122,8 @@ def execute_new_suite(
         if kind == "gmm_phase":
             config["evaluate_eval"] = False
             config["save_model"] = False
-        elif kind in ("neural_sv", "classical_sv", "keyword_google"):
+        elif kind in ("neural_sv", "classical_sv", "keyword_google",
+                      "mathworks_reference"):
             config["evaluate_locked_test"] = False
         identity = {
             "job": job, "config": config, "data": str(source), "track": track,
@@ -151,6 +156,10 @@ def execute_new_suite(
                                        track=track, benchmark=benchmark)
             elif kind == "keyword_google":
                 result = run_keyword(source, benchmark, KeywordRun.from_dict(config), path)
+            elif kind == "mathworks_reference":
+                result = run_google_mathworks(
+                    source, benchmark, MathWorksResearch.from_dict(config), path
+                )
             else:
                 previous_id = job.get("source_job")
                 if not previous_id:
