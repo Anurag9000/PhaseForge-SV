@@ -1,0 +1,34 @@
+{
+  "reference": {
+    "kind": "mfcc",
+    "win": 640,
+    "hop": 160,
+    "n_fft": 1024,
+    "bands": 40,
+    "coefficients": 13,
+    "peak_normalize": true,
+    "trim_longest_region": true,
+    "speech_db": -25
+  },
+  "em": {
+    "mixtures": 32,
+    "covariance": "diag",
+    "init": "random",
+    "iterations": 20,
+    "reg": 0.02
+  },
+  "map": {
+    "relevance": 16,
+    "adapt_variances": true,
+    "adapt_weights": true
+  },
+  "score": {
+    "norm": "none",
+    "smoothing": 3
+  },
+  "device": "auto",
+  "seed": 2026,
+  "max_background_files": null,
+  "frame_cap": 32,
+  "evaluate_locked_test": false
+}
