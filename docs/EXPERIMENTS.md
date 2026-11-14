@@ -83,3 +83,21 @@ fidelity limitations are in `docs/MISSING_RESEARCH_SUITE.md`.
 
 Software tests are not real GPU experiment results, and neural-only outputs
 are not competition-compliant GMM-UBM submissions.
+
+
+## Bonus experimental program: GMM GPU implementations and phase-only end-to-end optimization
+
+Read [BONUS_GPU_COMPARISON.md](BONUS_GPU_COMPARISON.md). A separate
+14-scenario GMM benchmarking matrix compares native PhaseForge fitting with
+TorchGMM 0.1.4 and optional NVIDIA cuVS **native C++** fitting/inference.
+Identical-parameter log-likelihood comparisons are separate from independently
+initialized EM fitting. One real TorchGMM/native CPU experiment and one
+exact same-model numerical parity check were completed on GitHub Actions.
+
+The 35-job bonus end-to-end ablation family measures full phase-frontend ->
+background transform -> GMM EM -> MAP enrollment -> dev LLR/EER pipeline;
+candidate optimizations include grouped-STFT batch, fused sufficient-statistics
+EM and batched speaker scoring. Every source remains Kaggle-background-only,
+and bonus experiments are not additional hidden-evaluation submissions.
+GPU memory, cuVS C++ compilation and full GPU speedups still require
+actual Kakarot CUDA execution.
