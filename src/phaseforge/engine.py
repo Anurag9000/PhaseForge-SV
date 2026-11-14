@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import pickle
 import random
 import zipfile
 import time
@@ -261,7 +262,8 @@ def extract_features(
                 for value in stored.values()
             ):
                 return stored
-        except (OSError, EOFError, RuntimeError, ValueError, zipfile.BadZipFile):
+        except (OSError, EOFError, RuntimeError, ValueError,
+                zipfile.BadZipFile, pickle.UnpicklingError):
             print(f"Invalid phase cache {cache}; extracting again", flush=True)
     extractor = PhaseExtractor(cfg)
     features = {}
