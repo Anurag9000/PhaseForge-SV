@@ -10,6 +10,7 @@ likelihood once, and scores several claimed speakers in a single GEMM.
 from __future__ import annotations
 
 from collections import defaultdict
+from dataclasses import replace
 
 import torch
 
@@ -68,7 +69,7 @@ def accelerated_score_trials(
     if not compatible:
         if strict_acceleration:
             raise ValueError("Batched scoring supports diagonal, unsmoothed full-mixture LLR only")
-        return score_trials(ubm, features, trials, speakers, config)
+        return score_trials(ubm, features, trials, speakers, replace(config, implementation="reference"))
     if not trials:
         return torch.empty((0,), dtype=torch.float64)
     grouped: dict[str, dict[str, list[int]]] = defaultdict(lambda: defaultdict(list))
