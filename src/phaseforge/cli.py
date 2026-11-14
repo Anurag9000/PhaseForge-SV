@@ -24,6 +24,7 @@ from .new_classical_runner import ClassicalRun, run_classical
 from .new_keyword import KeywordRun, run_keyword
 from .new_suite import execute_new_suite
 from .new_scoring import calibrate_saved_predictions
+from .google_mathworks_reference import MathWorksResearch, run_google_mathworks
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -98,6 +99,14 @@ def main(argv: list[str] | None = None) -> None:
         else:
             command.add_argument("--track", choices=["kaggle", "google"], default="kaggle")
             command.add_argument("--benchmark", default=None)
+    mathworks = commands.add_parser(
+        "run-mathworks-google",
+        help="Run original-Google MFCC/GMM-UBM reference; NEVER Kaggle data"
+    )
+    mathworks.add_argument("--data", required=True)
+    mathworks.add_argument("--benchmark", required=True)
+    mathworks.add_argument("--config", required=True)
+    mathworks.add_argument("--output", required=True)
     calibration = commands.add_parser("calibrate",
                                       help="Group-held-out logistic calibration research")
     calibration.add_argument("--development", required=True)
@@ -219,6 +228,10 @@ def main(argv: list[str] | None = None) -> None:
     elif args.action == "run-keyword":
         config = KeywordRun.from_dict(json.loads(Path(args.config).read_text()))
         result = run_keyword(args.data, args.benchmark, config, args.output)
+        print(json.dumps(result["metrics"], indent=2))
+    elif args.action == "run-mathworks-google":
+        cfg = MathWorksResearch.from_dict(json.loads(Path(args.config).read_text()))
+        result = run_google_mathworks(args.data, args.benchmark, cfg, args.output)
         print(json.dumps(result["metrics"], indent=2))
     elif args.action == "calibrate":
         result = calibrate_saved_predictions(
