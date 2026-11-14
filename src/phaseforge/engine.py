@@ -258,6 +258,15 @@ def extract_features(
     """Raw phase extraction only. Learned transforms are fitted later on background IDs."""
     cache_root.mkdir(parents=True, exist_ok=True)
     name = _cache_name(data, ids, cfg)
+    if batch_size > 1:
+        # Ensure a fast-frontend ablation measures its own cold extraction,
+        # not a previous reference-mode cached output. Also invalidate the
+        # optimized cache when its implementation changes.
+        from .bonus_frontend import can_batch
+        if can_batch(cfg):
+            bonus_source = Path(__file__).with_name("bonus_frontend.py")
+            backend_sha = hashlib.sha256(bonus_source.read_bytes()).hexdigest()[:12]
+            name = f"{name}_vectorized{batch_size}_{backend_sha}"
     cache = cache_root / f"phase_{name}.pt"
     if cache.exists():
         try:
