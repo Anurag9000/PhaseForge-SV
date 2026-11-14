@@ -25,6 +25,7 @@ from .engine import extract_features, load_research_manifests, select_device
 from .features import FeatureConfig
 from .metrics import grouped_bootstrap, report
 from .new_architectures import Architecture, PhaseSpeakerEncoder
+from .sampling import speaker_aware_subset
 from .new_objectives import (
     AAMSoftmax, GE2ELoss, PairVerifier, batch_hard_triplet,
     latent_predictive_loss, pairwise_bce, prototypical_loss, supervised_contrastive,
@@ -343,18 +344,14 @@ def run_neural(
         data = GoogleResearchData(root, Path(benchmark) / "google_manifest.csv")
     else:
         raise ValueError(track)
-    background = list(rows["background"])
-    if config.max_background_files is not None:
-        ids = random.Random(config.seed).sample(
-            sorted({r["file_id"] for r in background}),
-            min(config.max_background_files, len(background))
-        )
-        ids = set(ids)
-        background = [r for r in background if r["file_id"] in ids]
+    background = speaker_aware_subset(
+        list(rows["background"]), config.max_background_files,
+        min_takes=config.takes_per_speaker,
+        min_speakers=config.speakers_per_batch,
+        seed=config.seed,
+    )
     if isinstance(data, KaggleData):
         data.assert_background_only([r["file_id"] for r in background])
-    if track == "google" and config.evaluate_locked_test:
-        pass  # Explicit flag required to access the locked test population.
     if config.score == "pairwise" and config.objective != "pairwise":
         raise ValueError("Only pairwise-trained verifiers may use pairwise scores")
     start = time.perf_counter()
@@ -371,9 +368,6 @@ def run_neural(
         data.close()
     encoder, pair, trained = train_phase_network(features, background, config, device)
     embeddings = compute_embeddings(encoder, features, device)
-    if track == "google" and config.evaluate_locked_test:
-        if config.epochs == 0:
-            raise ValueError("Invalid test request")
     k = (3 if track == "kaggle" else int(protocol["enrolment_takes_per_speaker"]))
     # The benchmark specifies enrolment size. Never tune this on hidden trials.
     dev = verify_embeddings(
