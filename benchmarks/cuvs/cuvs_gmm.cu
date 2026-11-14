@@ -72,6 +72,10 @@ int main(int argc, char** argv) {
     auto seed=std::stoull(arg(argc,argv,"--seed"));
     std::string type=arg(argc,argv,"--covariance");
     std::string init=arg(argc,argv,"--init");
+    bool score_only=false;
+    for (int i=1;i<argc;++i) {
+      if (std::string(argv[i])=="--score-only") score_only=true;
+    }
     if (N<K || D<1 || NV<1 || K<1 || iters<1 || reg<=0)
       throw std::invalid_argument("Invalid dimensions or EM hyperparameters");
     size_t cn=cov_len(type,K,D);
@@ -107,11 +111,30 @@ int main(int argc, char** argv) {
     int n_iter=0;
     bool converged=false;
     auto start=std::chrono::steady_clock::now();
-    gmm::fit(res,cfg,raft::make_const_mdspan(x.view()),
-             weights.view(),means.view(),cov.view(),pchol.view(),
-             prec.view(),labels.view(),raft::make_host_scalar_view(&lower),
-             raft::make_host_scalar_view(&n_iter),raft::make_host_scalar_view(&converged));
-    raft::resource::sync_stream(res,stream);
+    if (score_only) {
+      if (type!="diag" && type!="spherical")
+        throw std::invalid_argument("Frozen cuVS scoring supports diag/spherical only");
+      auto packed=read_f32(arg(argc,argv,"--model"),K+K*D+cn);
+      std::vector<float> hw(packed.begin(),packed.begin()+K);
+      std::vector<float> hm(packed.begin()+K,packed.begin()+K+K*D);
+      std::vector<float> hc(packed.begin()+K+K*D,packed.end());
+      std::vector<float> cholesky(cn);
+      for (size_t j=0;j<cn;++j) {
+        if (!(hc[j]>0)) throw std::invalid_argument("Nonpositive frozen GMM variance");
+        cholesky[j]=1.f/std::sqrt(hc[j]);
+      }
+      raft::update_device(weights.data_handle(),hw.data(),K,stream);
+      raft::update_device(means.data_handle(),hm.data(),K*D,stream);
+      raft::update_device(cov.data_handle(),hc.data(),cn,stream);
+      raft::update_device(pchol.data_handle(),cholesky.data(),cn,stream);
+      raft::resource::sync_stream(res,stream);
+    } else {
+      gmm::fit(res,cfg,raft::make_const_mdspan(x.view()),
+               weights.view(),means.view(),cov.view(),pchol.view(),
+               prec.view(),labels.view(),raft::make_host_scalar_view(&lower),
+               raft::make_host_scalar_view(&n_iter),raft::make_host_scalar_view(&converged));
+      raft::resource::sync_stream(res,stream);
+    }
     auto fitted=std::chrono::steady_clock::now();
     auto score=[&] {
       gmm::score_samples(res,cfg,raft::make_const_mdspan(v.view()),
@@ -134,7 +157,12 @@ int main(int argc, char** argv) {
     packed.insert(packed.end(),hw.begin(),hw.end());
     packed.insert(packed.end(),hm.begin(),hm.end());
     packed.insert(packed.end(),hc.begin(),hc.end());
-    write_f32(arg(argc,argv,"--model"),packed);
+    if (!score_only) write_f32(arg(argc,argv,"--model"),packed);
+    if (score_only) {
+      for (int i=1;i+1<argc;++i) {
+        if (std::string(argv[i])=="--scores-out") write_f32(argv[i+1],hl);
+      }
+    }
     auto nonfinite=std::count_if(hl.begin(),hl.end(),[](float a){return !std::isfinite(a);});
     double mean=std::accumulate(hl.begin(),hl.end(),0.0)/NV;
     double var=0;
@@ -144,7 +172,8 @@ int main(int argc, char** argv) {
     double fitsec=std::chrono::duration<double>(fitted-start).count();
     double scoresec=std::chrono::duration<double>(s1-s0).count();
     std::cout << std::setprecision(12)
-      << "{\"backend\":\"cuvs\",\"fit_seconds\":"<<fitsec
+      << "{\"backend\":\"cuvs\",\"score_only\":"<<(score_only?"true":"false")
+      << ",\"fit_seconds\":"<<fitsec
       << ",\"score_seconds\":"<<scoresec
       << ",\"score_frames\":"<<NV
       << ",\"log_likelihood_mean\":"<<mean
