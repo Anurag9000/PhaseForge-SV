@@ -112,6 +112,42 @@ class BraidedBead(nn.Module):
         return F.gelu(x + self.fuse(torch.cat((a, b), dim=1)))
 
 
+class BraidedBead2D(nn.Module):
+    """BCNN-style 2D three-source braided bead with 3x3/5x5 and 1x1 joins.
+
+    Phase time-frequency matrix replaces the paper's mel-spectrogram image.
+    This preserves its characteristic branch/concat topology without claiming
+    the same trained filter counts or original magnitude input.
+    """
+    def __init__(self, channels: int):
+        super().__init__()
+        def pair(ci, kernel):
+            return nn.Sequential(
+                nn.Conv2d(ci, channels, kernel, padding=kernel//2, bias=False),
+                nn.BatchNorm2d(channels), nn.ReLU(),
+                nn.Conv2d(channels, channels, 1), nn.ReLU()
+            )
+        self.branch3 = pair(channels, 3)
+        self.branch5 = pair(channels, 5)
+        self.pool = nn.MaxPool2d(3, stride=1, padding=1)
+        self.branchpool = pair(channels, 1)
+        self.cross3 = pair(2 * channels, 3)
+        self.cross5 = pair(2 * channels, 5)
+        self.crosspool = pair(2 * channels, 1)
+        self.merge = nn.Sequential(nn.Conv2d(2 * channels, channels, 1),
+                                   nn.BatchNorm2d(channels), nn.ReLU())
+
+    def forward(self, x):
+        a = self.branch3(x)
+        b = self.branch5(x)
+        c = self.branchpool(self.pool(x))
+        ab = torch.cat((a, b), dim=1)
+        d = self.cross3(ab)
+        e = self.cross5(ab)
+        f = self.crosspool(self.pool(torch.cat((c, e), dim=1)))
+        return F.relu(x + self.merge(torch.cat((d, f), dim=1)))
+
+
 class SERes2Block(nn.Module):
     """ECAPA-style channel-split residual/dilated convolution + SE."""
     def __init__(self, channels: int, dilation: int = 2, scale: int = 4):
@@ -199,7 +235,7 @@ class SelectiveGatedState(nn.Module):
 MODEL_NAMES = (
     "bcnn", "xvector", "ecapa", "resnet", "se_resnet",
     "ds_cnn", "tc_resnet", "crnn", "kwt", "conformer", "ssm_lite",
-    "cnn", "res2_ecapa",
+    "cnn", "res2_ecapa", "bcnn_2d",
 )
 
 
@@ -211,10 +247,18 @@ class PhaseSpeakerEncoder(nn.Module):
         self.cfg = config
         self.stem = conv_block(input_dim, config.channels, 5)
         c = config.channels
+        self.two_dim_stem = (
+            nn.Sequential(
+                nn.Conv2d(1, c, 3, padding=1, bias=False),
+                nn.BatchNorm2d(c), nn.ReLU()
+            ) if config.name == "bcnn_2d" else None
+        )
         name = config.name
         self.blocks = nn.ModuleList()
         self.sequence = None
-        if name == "bcnn":
+        if name == "bcnn_2d":
+            self.blocks = nn.ModuleList(BraidedBead2D(c) for _ in range(config.depth))
+        elif name == "bcnn":
             self.blocks = nn.ModuleList(BraidedBead(c) for _ in range(config.depth))
         elif name in ("ecapa", "res2_ecapa"):
             self.blocks = nn.ModuleList(
@@ -259,6 +303,14 @@ class PhaseSpeakerEncoder(nn.Module):
             raise ValueError("Encoder requires [batch,time,phase] and [batch,time] mask")
         if not valid.any(1).all():
             raise ValueError("Every utterance must have at least one valid frame")
+        if self.cfg.name == "bcnn_2d":
+            # [B,T,D] -> phase time-frequency image [B,1,D,T]
+            z = self.two_dim_stem(frames.transpose(1, 2)[:, None])
+            for bead in self.blocks:
+                z = bead(z)
+            hidden = z.mean(dim=2)
+            pooled = self.pooling(hidden, valid)
+            return F.normalize(self.projection(pooled), dim=-1)
         hidden = self.stem(frames.transpose(1, 2))
         branches = []
         if self.cfg.name in ("kwt", "conformer", "ssm_lite", "crnn"):
