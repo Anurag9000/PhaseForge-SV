@@ -109,3 +109,32 @@ hardware capacity permits. This workflow **does not create a Kaggle model**.
 The original corpus has a different repeated-take distribution from the
 challenge; the 1-enrolment/1-heldout-take protocol must not be treated as the
 same experiment as Kaggle's 3-enrolment verification.
+
+
+## NEW — 126 previously missing-method research experiments
+
+The original 36-job suite remains unchanged. The additional 126-job registry lives at
+`configs/missing_research_suite.json`; see `docs/MISSING_RESEARCH_SUITE.md`.
+
+Smoke test with the competition-only dataset:
+
+    python3 -m phaseforge.cli suite-new --data /data/kaggle --track kaggle --config configs/new_missing_smoke.json --output runs/new_smoke
+
+Full Kaggle-background-only research comparisons:
+
+    bash scripts/run_missing_suite.sh /data/kaggle runs/new_missing 126
+
+Separate original Google speaker-disjoint research:
+
+    python3 -m phaseforge.cli suite-new --track google --data /data/google --benchmark /data/locked_google_benchmark --config configs/missing_research_suite.json --output runs/google_new --max-jobs 126
+
+Additional models: braided BCNN 1D/2D, GE2E, ECAPA/Res2, TDNN/x-vector,
+ResNet/SE-ResNet, DS-CNN, TC-ResNet, CRNN, KWT Transformer, Conformer,
+gated SSM-lite, multiple supervised/self-supervised objectives, GMM
+supervectors/i-vector/PLDA/SVM, passphrase backgrounds, adaptive S-norm,
+quality-aware scores, minDCF/Cllr, grouped calibration, and MathWorks
+phase-compatible ablations. Original MFCC/logmel references are Google-only.
+
+All new neural, classical, keyword and calibrated models are research-only;
+they do not produce eligible Kaggle GMM-UBM submissions. Registered jobs are
+not completed training runs; real EER is unknown until actual execution.
