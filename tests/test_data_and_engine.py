@@ -325,3 +325,57 @@ def test_mathworks_phase_preprocessing_synthetic_audio():
     features = PhaseExtractor(config)(waveform)
     assert features.shape[-1] == 48
     assert torch.isfinite(features).all()
+
+
+
+def test_phase_cache_invalidated_by_replaced_competition_wav(tiny_kaggle):
+    """Changing audio.zip member bytes must not reuse an old phase cache."""
+    from phaseforge.engine import _cache_name, extract_features
+    from phaseforge.features import FeatureConfig
+    from phaseforge.data import KaggleData
+    import torch
+    import zipfile
+    import os
+
+    config = FeatureConfig(mode="group", bands=8)
+    sample = ["b0_0"]
+    cached = tiny_kaggle / "cache_provenance"
+    with KaggleData(tiny_kaggle) as data:
+        before = _cache_name(data, sample, config)
+        result = extract_features(data, sample, config, cached, torch.device("cpu"))
+        assert sample[0] in result
+    archive = tiny_kaggle / "audio.zip"
+    new_zip = tiny_kaggle / "replaced_audio.zip"
+    changed = False
+    with zipfile.ZipFile(archive) as old, zipfile.ZipFile(new_zip, "w") as fresh:
+        for info in old.infolist():
+            content = bytearray(old.read(info))
+            if not changed and info.filename.endswith(".wav"):
+                content[-2] ^= 1
+                changed = True
+            fresh.writestr(info.filename, content)
+    assert changed
+    os.replace(new_zip, archive)
+    with KaggleData(tiny_kaggle) as data:
+        after = _cache_name(data, sample, config)
+        assert before != after
+        result = extract_features(data, sample, config, cached, torch.device("cpu"))
+        assert sample[0] in result
+    assert len(list(cached.glob("phase_*.pt"))) == 2
+
+
+def test_phase_cache_self_heals_after_interrupted_write(tiny_kaggle):
+    from phaseforge.engine import extract_features
+    from phaseforge.features import FeatureConfig
+    from phaseforge.data import KaggleData
+    import torch
+
+    cache = tiny_kaggle / "cache_corruption"
+    cfg = FeatureConfig(mode="group", bands=8)
+    with KaggleData(tiny_kaggle) as data:
+        extract_features(data, ["b0_0"], cfg, cache, torch.device("cpu"))
+        path = next(cache.glob("phase_*.pt"))
+        path.write_bytes(b"interrupted-cache")
+        again = extract_features(data, ["b0_0"], cfg, cache, torch.device("cpu"))
+        assert torch.isfinite(again["b0_0"]).all()
+        assert path.stat().st_size > len(b"interrupted-cache")
