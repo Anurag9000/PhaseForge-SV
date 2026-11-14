@@ -43,18 +43,18 @@ def test_batched_llr_matches_reference_for_all_chunks(
     speaker_setup, speaker_chunk, frame_chunk
 ):
     bg, features, models, trials = speaker_setup
-    control = score_trials(bg, features, trials, ScoreConfig(norm="none"))
+    control = score_trials(bg, features, trials, models, ScoreConfig(norm="none"))
     config = ScoreConfig(norm="none", implementation="batched",
                          speaker_chunk=speaker_chunk, frame_chunk=frame_chunk)
-    faster = score_trials(bg, features, trials, config)
+    faster = score_trials(bg, features, trials, models, config)
     assert faster.shape == control.shape
     assert torch.allclose(faster, control, atol=2e-4, rtol=1e-5)
 
 
 def test_unsupported_smoothing_falls_back_to_reference(speaker_setup):
     bg, features, models, trials = speaker_setup
-    ordinary = score_trials(bg, features, trials, ScoreConfig(smoothing=3))
-    adapted = score_trials(bg, features, trials,
+    ordinary = score_trials(bg, features, trials, models, ScoreConfig(smoothing=3))
+    adapted = score_trials(bg, features, trials, models,
                            ScoreConfig(smoothing=3, implementation="batched"))
     assert torch.equal(ordinary, adapted)
     with pytest.raises(ValueError, match="diagonal"):
