@@ -59,6 +59,8 @@ class NeuralRun:
     augment_noise: float = .02
     augment_mask_probability: float = .08
     ema_decay: float = .99
+    variance_weight: float = .1
+    variance_target: float = .08
 
     @classmethod
     def from_dict(cls, config: dict) -> "NeuralRun":
@@ -88,6 +90,8 @@ class NeuralRun:
             raise ValueError("Invalid phase augmentation")
         if not 0 < self.ema_decay < 1:
             raise ValueError("EMA momentum must be in (0,1)")
+        if self.variance_weight < 0 or self.variance_target <= 0:
+            raise ValueError("Invalid latent variance regularization")
 
 
 def speaker_batches(rows: list[dict], n: int, m: int, steps: int, seed: int):
@@ -224,17 +228,37 @@ def train_phase_network(
             elif objective == "pairwise":
                 loss = pairwise_bce(pair, embeddings, episode_labels)
             elif objective in ("byol", "jepa"):
-                # Stop-gradient target, EMA teacher, two independently masked
-                # views; jepa adds future temporal occlusion.
+                # The online network sees a corrupted context. EMA target
+                # sees an INDEPENDENT, less-masked view. For JEPA-like
+                # prediction, future context is removed only from ONLINE
+                # input; the stop-gradient teacher retains the full context.
+                target_view = augment_phase_features(
+                    x, valid, config.augment_noise, config.augment_mask_probability
+                )
+                if objective == "jepa":
+                    context_view = augmented.clone()
+                    cutoff = max(1, context_view.shape[1] // 4)
+                    context_view[:, -cutoff:] = 0
+                    embeddings = encoder(context_view, valid)
                 with torch.no_grad():
-                    target_view = augment_phase_features(
-                        x, valid, config.augment_noise, config.augment_mask_probability
-                    )
-                    if objective == "jepa":
-                        cutoff = max(1, target_view.shape[1] // 4)
-                        target_view[:, -cutoff:] = 0
                     goal = teacher(target_view, valid)
                 loss = latent_predictive_loss(predictor(embeddings), goal)
+                if objective == "byol":
+                    second_online = encoder(target_view, valid)
+                    with torch.no_grad():
+                        reversed_target = teacher(augmented, valid)
+                    loss = .5 * (
+                        loss + latent_predictive_loss(
+                            predictor(second_online), reversed_target
+                        )
+                    )
+                # Small VICReg-style variance floor discourages representation
+                # collapse when training on tiny/short phase utterances.
+                latents = embeddings.float()
+                spread = latents.std(dim=0, unbiased=False)
+                loss = loss + config.variance_weight * torch.relu(
+                    config.variance_target - spread
+                ).mean()
             else:
                 raise ValueError(objective)
             if not torch.isfinite(loss):
@@ -247,6 +271,14 @@ def train_phase_network(
                 with torch.no_grad():
                     for old, new in zip(teacher.parameters(), encoder.parameters()):
                         old.lerp_(new, 1 - config.ema_decay)
+                    # BatchNorm running statistics are buffers, not parameters;
+                    # leaving them frozen at initialization makes target
+                    # embeddings inconsistent with the EMA model weights.
+                    for old, new in zip(teacher.buffers(), encoder.buffers()):
+                        if old.dtype.is_floating_point:
+                            old.lerp_(new, 1 - config.ema_decay)
+                        else:
+                            old.copy_(new)
             losses.append(float(loss.detach()))
         history.append(sum(losses) / len(losses))
         print(f"architecture={config.architecture.name} objective={config.objective} "
@@ -260,6 +292,18 @@ def train_phase_network(
                  if pair is not None else None),
         "loss_history": history, "speaker_count": len(speaker_names),
         "training_utterances": len(background_rows),
+        "objective_state": {
+            "classifier": {k: v.detach().cpu() for k, v in classifier.state_dict().items()}
+                if config.objective == "cross_entropy" else None,
+            "aam": {k: v.detach().cpu() for k, v in aam.state_dict().items()}
+                if config.objective == "aam" else None,
+            "ge2e": {k: v.detach().cpu() for k, v in ge2e.state_dict().items()}
+                if config.objective == "ge2e" else None,
+            "predictor": {k: v.detach().cpu() for k, v in predictor.state_dict().items()}
+                if teacher is not None else None,
+            "ema_teacher": {k: v.detach().cpu() for k, v in teacher.state_dict().items()}
+                if teacher is not None else None,
+        },
     }
     return encoder, pair, artifact
 
