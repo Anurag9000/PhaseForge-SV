@@ -6,7 +6,7 @@ on:
         description: Experiment runner
         type: choice
         required: true
-        options: [run, sweep, optimize, suite, suite-new, neural, classical, keyword, mathworks-google, proxy, gmm-study, run-alt, robustness, analyze]
+        options: [run, sweep, optimize, suite, suite-new, neural, classical, keyword, mathworks-google, proxy, gmm-study, run-alt, robustness, analyze, bonus-gmm, bonus-e2e, bonus-parity]
         default: run
       track:
         description: Dataset track (Google is research only)
@@ -22,6 +22,14 @@ on:
         description: Max jobs to run (36 original / 127 newly registered)
         type: number
         default: 3
+      cuvs_binary_path:
+        description: Optional compiled cuVS GMM binary path for GPU benchmark
+        required: false
+        default: ''
+      bonus_checkpoint:
+        description: Frozen Kaggle UBM checkpoint path for scoring parity
+        required: false
+        default: ''
       data_path:
         description: Existing dataset directory on self-hosted runner
         required: true
@@ -46,6 +54,9 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install package without changing runner CUDA torch
         run: python -m pip install -e '.[dev]'
+      - name: Install optional bonus TorchGMM/NVML comparator dependencies
+        if: inputs.mode == 'bonus-gmm'
+        run: python -m pip install -e '.[bonus]'
       - name: Validate source and run experiment
         env:
           EXPERIMENT_MODE: ${{ inputs.mode }}
@@ -57,6 +68,8 @@ jobs:
           JOB_IDENTIFIER: ${{ github.run_id }}
           PERSISTENT_RESULTS_PATH: ${{ inputs.results_path }}
           SUITE_JOB_LIMIT: ${{ inputs.max_suite_jobs }}
+          CUVS_BONUS_BINARY: ${{ inputs.cuvs_binary_path }}
+          BONUS_FROZEN_MODEL: ${{ inputs.bonus_checkpoint }}
         shell: bash
         run: |
           set -euo pipefail
@@ -77,6 +90,15 @@ jobs:
             optimize) test "$SOURCE_TRACK" = kaggle; python -m phaseforge.cli optimize --data "$SOURCE_DATA_PATH" --config "$EXPERIMENT_CONFIG" --output "$OUTPUT" ;;
             suite) test "$SOURCE_TRACK" = kaggle; python -m phaseforge.cli suite --data "$SOURCE_DATA_PATH" --config "$EXPERIMENT_CONFIG" --output "$OUTPUT" --max-jobs "$SUITE_JOB_LIMIT" ;;
             suite-new) python -m phaseforge.cli suite-new --data "$SOURCE_DATA_PATH" --config "$EXPERIMENT_CONFIG" --output "$OUTPUT" --track "$SOURCE_TRACK" --benchmark "$RESEARCH_BENCHMARK" --max-jobs "$SUITE_JOB_LIMIT" ;;
+            bonus-gmm)
+              test "$SOURCE_TRACK" = kaggle
+              if [ -n "$CUVS_BONUS_BINARY" ]; then
+                python -m phaseforge.bonus_benchmark --config "$EXPERIMENT_CONFIG" --output "$OUTPUT" --kaggle-data "$SOURCE_DATA_PATH" --backends native torchgmm cuvs --cuvs-binary "$CUVS_BONUS_BINARY" --device cuda --strict
+              else
+                python -m phaseforge.bonus_benchmark --config "$EXPERIMENT_CONFIG" --output "$OUTPUT" --kaggle-data "$SOURCE_DATA_PATH" --backends native torchgmm --device cuda --strict
+              fi ;;
+            bonus-e2e) test "$SOURCE_TRACK" = kaggle; python -m phaseforge.bonus_end_to_end ablation --data "$SOURCE_DATA_PATH" --config "$EXPERIMENT_CONFIG" --output "$OUTPUT" --max-jobs "$SUITE_JOB_LIMIT" --strict ;;
+            bonus-parity) test "$SOURCE_TRACK" = kaggle; test -f "$BONUS_FROZEN_MODEL"; python -m phaseforge.bonus_end_to_end compare --data "$SOURCE_DATA_PATH" --checkpoint "$BONUS_FROZEN_MODEL" --output "$OUTPUT" --device cuda --repeats 5 ;;
             neural) python -m phaseforge.cli run-neural --data "$SOURCE_DATA_PATH" --config "$EXPERIMENT_CONFIG" --output "$OUTPUT" --track "$SOURCE_TRACK" --benchmark "$RESEARCH_BENCHMARK" ;;
             classical) python -m phaseforge.cli run-classical --data "$SOURCE_DATA_PATH" --config "$EXPERIMENT_CONFIG" --output "$OUTPUT" --track "$SOURCE_TRACK" --benchmark "$RESEARCH_BENCHMARK" ;;
             keyword) test "$SOURCE_TRACK" = google; python -m phaseforge.cli run-keyword --data "$SOURCE_DATA_PATH" --config "$EXPERIMENT_CONFIG" --output "$OUTPUT" --benchmark "$RESEARCH_BENCHMARK" ;;
