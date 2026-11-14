@@ -112,6 +112,52 @@ def fit_background_transform(
         raise ValueError("Need background feature IDs")
     if method == "none":
         return features, None
+    if method == "global_local_pca":
+        # Unlike legacy PCA, this newer MathWorks-inspired transform must not
+        # concatenate every original-Google background frame before clipping
+        # the training pool. Bound the frame budget BEFORE allocating.
+        if max_frames < 2:
+            raise ValueError("Need at least two background frames for global/local PCA")
+        selected = list(dict.fromkeys(background_ids))
+        if len(selected) > max_frames:
+            selected = [
+                selected[i] for i in torch.linspace(
+                    0, len(selected) - 1, max_frames
+                ).long().tolist()
+            ]
+        quota = max(1, (max_frames + len(selected) - 1) // len(selected))
+        pieces = []
+        for file in selected:
+            frame = features[file]
+            count = min(len(frame), quota)
+            pieces.append(frame[
+                torch.linspace(
+                    0, len(frame) - 1, count, device=frame.device
+                ).long()
+            ])
+        X = torch.cat(pieces, dim=0)
+        if len(X) > max_frames:
+            X = X[torch.linspace(
+                0, len(X) - 1, max_frames, device=X.device
+            ).long()]
+        normalizer = BackgroundCMVN().fit(X)
+        local = []
+        for file in selected:
+            z = normalizer(features[file])
+            count = min(len(z), quota)
+            indices = torch.linspace(
+                0, len(z) - 1, count, device=z.device
+            ).long()
+            local.append(z[indices] - z.mean())
+        pool = torch.cat(local, dim=0)
+        if len(pool) > max_frames:
+            pool = pool[torch.linspace(
+                0, len(pool) - 1, max_frames, device=pool.device
+            ).long()]
+        transform = GlobalLocalCenteredProjection(
+            normalizer, PCA(dim).fit(pool)
+        )
+        return {ident: transform(x) for ident, x in features.items()}, transform
     X = torch.cat([features[ident] for ident in background_ids], 0)
     if len(X) > max_frames:
         X = X[torch.linspace(0, len(X) - 1, max_frames, device=X.device).long()]
@@ -123,20 +169,6 @@ def fit_background_transform(
         transform = ICA(dim, seed=seed).fit(X)
     elif method == "global":
         transform = BackgroundCMVN().fit(X)
-    elif method == "global_local_pca":
-        normalizer = BackgroundCMVN().fit(X)
-        # Apply local centering independently to each background utterance
-        # BEFORE PCA; dev and test utterances never influence fitted parameters.
-        pool = torch.cat([
-            normalizer(features[file]) - normalizer(features[file]).mean()
-            for file in background_ids
-        ], 0)
-        if len(pool) > max_frames:
-            pool = pool[torch.linspace(
-                0, len(pool)-1, max_frames, device=pool.device
-            ).long()]
-        projection = PCA(dim).fit(pool)
-        transform = GlobalLocalCenteredProjection(normalizer, projection)
     elif method in ("global_pca", "global_whiten", "global_ica"):
         normalizer = BackgroundCMVN().fit(X)
         whitened = normalizer(X)
