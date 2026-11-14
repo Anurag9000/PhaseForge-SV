@@ -32,6 +32,18 @@
       }
     },
     {
+      "id": "group_em_fused",
+      "overrides": {
+        "em.em_impl": "fused"
+      }
+    },
+    {
+      "id": "group_em_reference",
+      "overrides": {
+        "em.em_impl": "reference"
+      }
+    },
+    {
       "id": "group_16mix",
       "overrides": {
         "em.mixtures": 16
