@@ -9,6 +9,7 @@ from phaseforge.transforms import BackgroundCMVN, fit_background_transform
     [
         ("global", 6), ("global_pca", 4),
         ("global_whiten", 4), ("global_ica", 4),
+        ("global_local_pca", 4),
     ],
 )
 def test_global_statistics_are_background_only(mode, expected_dim):
