@@ -21,7 +21,10 @@ import time
 import torch
 
 from .data import KaggleData, read_csv
-from .engine import RunConfig, extract_features, run, select_device
+from .engine import (
+    RunConfig, extract_features, run, select_device, _recording_fingerprint,
+)
+from .new_suite import _implementation_fingerprint
 from .features import FeatureConfig
 from .gmm import EMConfig, MAPConfig, TorchGMM
 from .metrics import grouped_bootstrap, report
@@ -172,6 +175,25 @@ def _apply_overrides(config: dict, changes: dict):
     return new
 
 
+def _bonus_source_fingerprint(root: str | Path) -> dict:
+    """Detect modified code, competition CSV and WAV source when resuming."""
+    root = Path(root).resolve()
+    digest = hashlib.sha256()
+    for name in ("background.csv", "dev_enrol.csv", "dev_trials.csv",
+                 "eval_enrol.csv", "eval_trials.csv", "sample_submission.csv"):
+        src = root / name
+        digest.update(name.encode())
+        digest.update(src.read_bytes())
+    with KaggleData(root) as data:
+        audio = _recording_fingerprint(data, [])
+    return {
+        "csv_sha256": digest.hexdigest(),
+        "audio_sha256": audio,
+        "implementation_sha256": _implementation_fingerprint(),
+        "source_root": str(root),
+    }
+
+
 def run_ablation(
     data_root: str | Path, manifest: dict,
     output: str | Path, limit: int | None = None,
@@ -188,6 +210,7 @@ def run_ablation(
     out = Path(output)
     out.mkdir(parents=True, exist_ok=True)
     base = json.loads(Path(manifest["base_config"]).read_text())
+    source_fingerprint = _bonus_source_fingerprint(data_root)
     ledger_path = out / "bonus_ablation_ledger.json"
     previous = json.loads(ledger_path.read_text()) if ledger_path.exists() else {}
     records = {}
@@ -202,7 +225,7 @@ def run_ablation(
         cfg.validate()
         # Exact implementation/config/data version, not just a label.
         digest = hashlib.sha256(json.dumps(
-            {"config": config, "source": str(Path(data_root).resolve())},
+            {"config": config, "source": source_fingerprint},
             sort_keys=True,
         ).encode()).hexdigest()
         result_dir = out / "jobs" / job["id"]
@@ -223,12 +246,15 @@ def run_ablation(
                     result["hardware"]["peak_cuda_allocated_bytes"]
                 ),
                 "config": config, "directory": str(result_dir),
+                "source_fingerprint": source_fingerprint,
+                "stage_seconds": result.get("stage_seconds"),
             }
         except Exception as exc:
             entry = {
                 "id": job["id"], "status": "failed",
                 "digest": digest, "error": repr(exc),
                 "config": config, "directory": str(result_dir),
+                "source_fingerprint": source_fingerprint,
             }
         records[job["id"]] = entry
         previous[job["id"]] = entry
