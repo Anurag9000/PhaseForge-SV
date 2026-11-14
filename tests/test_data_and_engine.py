@@ -437,3 +437,54 @@ def test_bonus_end_to_end_smoke_uses_only_development_trials(tiny_kaggle):
         assert (job/"development_scores.csv").exists()
         assert not (job/"evaluation_scores.csv").exists()
         assert not (job/"submission.csv").exists()
+
+
+
+def test_real_synthetic_wav_batched_frontend_matches_reference_pipeline(tiny_kaggle):
+    from phaseforge.engine import RunConfig, run
+    import json
+
+    base = {
+        "feature":{"mode":"group","bands":8},
+        "em":{"mixtures":2,"iterations":4,"reg":.05,"chunk":32},
+        "map":{"relevance":4},
+        "score":{"norm":"none","implementation":"batched",
+                 "speaker_chunk":2,"frame_chunk":8},
+        "transform":"pca","dimensions":4,"seeds":[2026],
+        "max_frames_per_background_file":8,
+        "save_model":False,"evaluate_eval":False,"device":"cpu",
+    }
+    root = tiny_kaggle/"batch_frontend_pipeline"
+    ref = run(tiny_kaggle, RunConfig.from_dict({
+        **base,"feature_batch_size":1
+    }), root/"reference")
+    fast = run(tiny_kaggle, RunConfig.from_dict({
+        **base,"feature_batch_size":4
+    }), root/"batched")
+    assert fast["stage_seconds"]["feature_extraction"] >= 0
+    assert fast["stage_seconds"]["gmm_fit"] >= 0
+    assert fast["stage_seconds"]["map_enrolment"] >= 0
+    assert not (root/"batched"/"submission.csv").exists()
+    assert abs(ref["metrics"]["eer"] - fast["metrics"]["eer"]) < 1e-10
+    import csv
+    def values(path):
+        with path.open() as fh:
+            return [(r["trial_id"],float(r["score"]))
+                    for r in csv.DictReader(fh)]
+    a=values(root/"reference/development_scores.csv")
+    b=values(root/"batched/development_scores.csv")
+    assert [row[0] for row in a] == [row[0] for row in b]
+    assert max(abs(x[1]-y[1]) for x,y in zip(a,b)) < 2e-4
+
+
+def test_bonus_frontend_benchmark_measures_cpu_and_is_phase_only(tiny_kaggle):
+    from phaseforge.bonus_frontend_benchmark import benchmark_frontend
+    out=tiny_kaggle/"bonus_frontend_cpu"
+    result=benchmark_frontend(
+        tiny_kaggle,out,max_files=6,batches=(1,2,4),repeats=2,
+        device_name="cpu",
+    )
+    assert result["track"] == "kaggle_background_only"
+    assert result["phase_input_only"]
+    assert result["measurements"]["2"]["max_abs_phase_feature_error"] < 2e-4
+    assert (out/"frontend_benchmark.json").exists()
