@@ -1084,6 +1084,143 @@
       "config": "configs/new_calibration.json",
       "overrides": {},
       "source_job": "bcnn_2d_aam"
+    },
+    {
+      "id": "original_mathworks_mfcc_40ms",
+      "kind": "mathworks_reference",
+      "config": "configs/new_google_mathworks_reference.json",
+      "overrides": {},
+      "tracks": [
+        "google"
+      ]
+    },
+    {
+      "id": "original_mathworks_mfcc_means_only",
+      "kind": "mathworks_reference",
+      "config": "configs/new_google_mathworks_reference.json",
+      "overrides": {
+        "map.adapt_variances": false,
+        "map.adapt_weights": false
+      },
+      "tracks": [
+        "google"
+      ]
+    },
+    {
+      "id": "original_mathworks_mfcc_no_speech_trim",
+      "kind": "mathworks_reference",
+      "config": "configs/new_google_mathworks_reference.json",
+      "overrides": {
+        "reference.trim_longest_region": false
+      },
+      "tracks": [
+        "google"
+      ]
+    },
+    {
+      "id": "original_mathworks_mfcc_25ms",
+      "kind": "mathworks_reference",
+      "config": "configs/new_google_mathworks_reference.json",
+      "overrides": {
+        "reference.win": 400,
+        "reference.n_fft": 512
+      },
+      "tracks": [
+        "google"
+      ]
+    },
+    {
+      "id": "original_mathworks_mfcc_64mix",
+      "kind": "mathworks_reference",
+      "config": "configs/new_google_mathworks_reference.json",
+      "overrides": {
+        "em.mixtures": 64
+      },
+      "tracks": [
+        "google"
+      ]
+    },
+    {
+      "id": "original_mathworks_mfcc_no_median",
+      "kind": "mathworks_reference",
+      "config": "configs/new_google_mathworks_reference.json",
+      "overrides": {
+        "score.smoothing": 1
+      },
+      "tracks": [
+        "google"
+      ]
+    },
+    {
+      "id": "original_mathworks_mfcc_relevance8",
+      "kind": "mathworks_reference",
+      "config": "configs/new_google_mathworks_reference.json",
+      "overrides": {
+        "map.relevance": 8
+      },
+      "tracks": [
+        "google"
+      ]
+    },
+    {
+      "id": "original_bcnn2d_logmel",
+      "kind": "keyword_google",
+      "config": "configs/new_keyword_base.json",
+      "overrides": {
+        "architecture.name": "bcnn_2d",
+        "frontend": "logmel"
+      },
+      "tracks": [
+        "google"
+      ]
+    },
+    {
+      "id": "original_kwt_logmel",
+      "kind": "keyword_google",
+      "config": "configs/new_keyword_base.json",
+      "overrides": {
+        "architecture.name": "kwt",
+        "frontend": "logmel"
+      },
+      "tracks": [
+        "google"
+      ]
+    },
+    {
+      "id": "original_dscnn_logmel",
+      "kind": "keyword_google",
+      "config": "configs/new_keyword_base.json",
+      "overrides": {
+        "architecture.name": "ds_cnn",
+        "frontend": "logmel"
+      },
+      "tracks": [
+        "google"
+      ]
+    },
+    {
+      "id": "original_tcresnet_logmel",
+      "kind": "keyword_google",
+      "config": "configs/new_keyword_base.json",
+      "overrides": {
+        "architecture.name": "tc_resnet",
+        "frontend": "logmel"
+      },
+      "tracks": [
+        "google"
+      ]
+    },
+    {
+      "id": "original_bcnn2d_mfcc",
+      "kind": "keyword_google",
+      "config": "configs/new_keyword_base.json",
+      "overrides": {
+        "architecture.name": "bcnn_2d",
+        "frontend": "mfcc"
+      },
+      "tracks": [
+        "google"
+      ]
     }
   ]
 }
