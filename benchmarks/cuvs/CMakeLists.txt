@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.26)
+project(phaseforge_cuvs_bonus LANGUAGES CXX CUDA)
+find_package(CUDAToolkit REQUIRED)
+find_package(cuvs CONFIG REQUIRED)
+add_executable(bonus_cuvs_gmm cuvs_gmm.cu)
+target_compile_features(bonus_cuvs_gmm PRIVATE cxx_std_20)
+target_link_libraries(bonus_cuvs_gmm PRIVATE cuvs::cuvs CUDA::cudart)
+set_target_properties(bonus_cuvs_gmm PROPERTIES CUDA_STANDARD 20)
