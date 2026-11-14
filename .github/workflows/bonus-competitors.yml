@@ -56,6 +56,11 @@ jobs:
           print('Identical TorchGMM native parameters: max log-p delta:',
                 competitor['max_abs_logp_diff'])
           PY
+      - name: Generate measured, clearly CPU-only bonus report
+        run: |
+          python -m phaseforge.bonus_report \
+            --benchmark runs/bonus_competitors_cpu/bonus_results.json \
+            --output runs/bonus_competitors_cpu/CPU_ONLY_BONUS_REPORT.md
       - name: Upload measured results even on failure
         if: always()
         uses: actions/upload-artifact@v4
@@ -64,5 +69,6 @@ jobs:
           path: |
             runs/bonus_competitors_cpu/*.csv
             runs/bonus_competitors_cpu/*.json
+            runs/bonus_competitors_cpu/*.md
             runs/bonus_identical_cpu/**/*.json
           if-no-files-found: warn
