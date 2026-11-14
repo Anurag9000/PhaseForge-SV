@@ -20,7 +20,7 @@ with all failed trials in the ledger.
 
 Implemented Python modules:
 - data.py: strict Kaggle and original Google research data isolation
-- features.py: phase-only 10-mode waveform feature extraction
+- features.py: phase-only waveform feature extraction, including additional named cepstral surrogate ablations
 - transforms.py: background-fitted PCA/ICA
 - gmm.py: Torch EM, covariance studies, optional variance/weight MAP
 - hmm.py: left-right forward-backward Baum-Welch and MAP emission adaptation
@@ -32,7 +32,7 @@ Implemented Python modules:
 - experiments.py: bounded/resumable search, score fusion
 
 Not yet implemented or verified: complete Google archive benchmark run,
-new actual Kaggle EER, neural phase encoders, cuVS/TorchGMM hardware benchmark,
+new actual Kaggle EER, exact paper-level reproduction of every published neural architecture, cuVS/TorchGMM hardware benchmark,
 all literature reproduction targets, exhaustive GPU search over every combination.
 Run status must be taken from actual saved experiment artifacts and CI, not
 from source-code implementation alone.
@@ -67,3 +67,19 @@ recordings while comparing models.
 
 No new real-corpus EER is claimed until the relevant data-backed job
 completes and saves its score tables, validation protocol and run manifest.
+
+
+## New suite correcting earlier omitted methods
+
+The 126 new executable jobs are in `configs/missing_research_suite.json`,
+separate from the 36 original jobs. Modules `new_architectures.py`,
+`new_objectives.py`, `new_neural_runner.py`, `new_classical.py`,
+`new_classical_runner.py`, `new_keyword.py`, `google_reference_features.py`,
+`google_mathworks_reference.py`, `new_scoring.py` and `new_suite.py` implement
+the additional architectures, training losses, scoring and trial pipelines.
+
+Run with `phaseforge suite-new`. Details, source separation and documented
+fidelity limitations are in `docs/MISSING_RESEARCH_SUITE.md`.
+
+Software tests are not real GPU experiment results, and neural-only outputs
+are not competition-compliant GMM-UBM submissions.
