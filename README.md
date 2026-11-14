@@ -111,9 +111,9 @@ challenge; the 1-enrolment/1-heldout-take protocol must not be treated as the
 same experiment as Kaggle's 3-enrolment verification.
 
 
-## NEW — 126 previously missing-method research experiments
+## NEW — 127 previously missing-method research experiments
 
-The original 36-job suite remains unchanged. The additional 126-job registry lives at
+The original 36-job suite remains unchanged. The additional 127-job registry lives at
 `configs/missing_research_suite.json`; see `docs/MISSING_RESEARCH_SUITE.md`.
 
 Smoke test with the competition-only dataset:
