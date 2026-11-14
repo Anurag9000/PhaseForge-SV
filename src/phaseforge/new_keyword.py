@@ -23,12 +23,16 @@ from .engine import extract_features, select_device
 from .features import FeatureConfig
 from .new_architectures import Architecture, PhaseSpeakerEncoder
 from .new_neural_runner import frames_batch, augment_phase_features
+from .google_reference_features import ReferenceFeature, extract_google_reference
 
 
 @dataclass(frozen=True)
 class KeywordRun:
     feature: FeatureConfig = field(default_factory=FeatureConfig)
     architecture: Architecture = field(default_factory=lambda: Architecture(name="bcnn"))
+    frontend: str = "phase"  # phase | logmel | mfcc, Google ONLY
+    reference: ReferenceFeature = field(default_factory=lambda:
+                                         ReferenceFeature(kind="logmel"))
     words: tuple[str, ...] = (
         "yes", "no", "up", "down", "left", "right", "on", "off", "stop", "go",
     )
@@ -51,13 +55,18 @@ class KeywordRun:
         return cls(
             feature=FeatureConfig(**feat),
             architecture=Architecture(**obj.get("architecture", {})),
+            reference=ReferenceFeature(**obj.get("reference", {"kind":"logmel"})),
             **{key: (tuple(value) if key == "words" else value)
-               for key, value in obj.items() if key not in ("feature", "architecture")},
+               for key, value in obj.items()
+               if key not in ("feature", "architecture", "reference")},
         )
 
     def validate(self):
         self.feature.validate()
         self.architecture.validate()
+        self.reference.validate()
+        if self.frontend not in ("phase", "logmel", "mfcc"):
+            raise ValueError("Unknown original-Google keyword frontend")
         if self.epochs < 1 or self.steps_per_epoch < 1 or self.batch_size < 2:
             raise ValueError("Invalid keyword training settings")
         if len(set(self.words)) != len(self.words) or len(self.words) < 2:
@@ -104,10 +113,17 @@ def run_keyword(root: str | Path, benchmark: str | Path,
     used = train + dev + (test if config.evaluate_locked_test else [])
     device = select_device(config.device)
     start = time.perf_counter()
-    features = extract_features(
-        source, [r["file_id"] for r in used], config.feature,
-        output.parent / ".keyword_cache", device,
-    )
+    if config.frontend == "phase":
+        features = extract_features(
+            source, [r["file_id"] for r in used], config.feature,
+            output.parent / ".keyword_cache", device,
+        )
+    else:
+        from dataclasses import replace
+        reference = replace(config.reference, kind=config.frontend)
+        features = extract_google_reference(
+            source, [r["file_id"] for r in used], reference, device
+        )
     ids = [r["file_id"] for r in train]
     targets = {r["file_id"]: r["label"] for r in used}
     torch.manual_seed(config.seed)
@@ -181,6 +197,7 @@ def run_keyword(root: str | Path, benchmark: str | Path,
         "source_track": "original_google_keyword_research",
         "research_only": True,
         "metric_is_speaker_verification_eer": False,
+        "frontend": config.frontend,
         "config": asdict(config), "losses": losses,
         "metrics": reports, "seconds": time.perf_counter() - start,
         "background_speakers": len({r["speaker_id"] for r in train}),
