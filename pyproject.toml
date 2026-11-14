@@ -13,6 +13,7 @@ dependencies = ["torch>=2.2", "torchaudio>=2.2"]
 dev = ["pytest>=8", "ruff>=0.7"]
 plots = ["matplotlib>=3.8"]
 search = ["optuna>=4"]
+bonus = ["torchgmm==0.1.4", "numpy>=1.26"]
 
 [project.scripts]
 phaseforge = "phaseforge.cli:main"
