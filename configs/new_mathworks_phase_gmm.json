@@ -7,7 +7,10 @@
     "bands": 24,
     "normalization": "none",
     "masked_mean": false,
-    "vad_db": -30
+    "vad_db": -30,
+    "peak_normalize": true,
+    "trim_longest_region": true,
+    "speech_region_db": -25
   },
   "em": {
     "mixtures": 32,
