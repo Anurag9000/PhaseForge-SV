@@ -270,3 +270,54 @@ def test_new_classical_real_wav_pipeline_methods(tiny_kaggle, method):
     assert (out / "checkpoint.pt").exists()
     assert (out / "development_scores.csv").exists()
     assert not (out / "submission.csv").exists()
+
+
+
+def test_new_heterogeneous_suite_executes_and_resumes(tiny_kaggle):
+    """New suite remains separate, resumable and dev-only."""
+    from phaseforge.new_suite import execute_new_suite
+    import json
+    root = tiny_kaggle
+    config = root / "tiny_neural.json"
+    config.write_text(json.dumps({
+        "feature": {"mode":"group","bands":8},
+        "architecture":{"name":"xvector","channels":16,
+                        "embedding":8,"depth":1},
+        "objective":"aam", "epochs":1,"steps_per_epoch":1,
+        "speakers_per_batch":2,"takes_per_speaker":2,
+        "max_frames":16,"device":"cpu",
+    }))
+    registry = {"suite_family":"new_phase_research","jobs":[
+        {"id":"first_neural","kind":"neural_sv","config":str(config)},
+        {"id":"google_only","kind":"keyword_google","config":str(config),
+         "tracks":["google"]},
+    ]}
+    destination = root / "missing_methods_results"
+    first = execute_new_suite(root, registry, destination, "kaggle")
+    assert first["completed"] == 1
+    assert first["failed"] == 0
+    assert first["skipped_other_track"] == 1
+    checkpoint = destination / "jobs/000_first_neural/result.json"
+    assert checkpoint.is_file()
+    assert not (checkpoint.parent / "submission.csv").exists()
+    timestamp = checkpoint.stat().st_mtime_ns
+    second = execute_new_suite(root, registry, destination, "kaggle")
+    assert second["completed"] == 1
+    assert checkpoint.stat().st_mtime_ns == timestamp
+
+
+def test_mathworks_phase_preprocessing_synthetic_audio():
+    import torch
+    from phaseforge.features import FeatureConfig, PhaseExtractor
+    waveform = torch.zeros(16000)
+    waveform[4000:9000] = .3 * torch.sin(
+        torch.arange(5000) * (2 * 3.14159 * 300 / 16000)
+    )
+    config = FeatureConfig(
+        mode="group", win=640, hop=160, n_fft=1024, bands=24,
+        peak_normalize=True, trim_longest_region=True,
+        normalization="none",
+    )
+    features = PhaseExtractor(config)(waveform)
+    assert features.shape[-1] == 48
+    assert torch.isfinite(features).all()
