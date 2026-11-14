@@ -11,6 +11,7 @@ import hashlib
 import json
 import subprocess
 import time
+import zipfile
 from pathlib import Path
 
 from .data import KaggleData
@@ -100,16 +101,31 @@ def execute_new_suite(
             for name in files:
                 digest.update((source / name).read_bytes())
             signature["manifest_digest"] = digest.hexdigest()
+            # Hash ZIP central-directory identity without reading/decoding
+            # the complete multi-gigabyte archive before every resumed job.
+            zip_digest = hashlib.sha256()
+            with zipfile.ZipFile(source / "audio.zip") as archive:
+                for info in sorted(archive.infolist(), key=lambda x: x.filename):
+                    zip_digest.update(
+                        f"{info.filename}|{info.file_size}|{info.compress_size}|"
+                        f"{info.CRC:08x}\n".encode()
+                    )
+            signature["audio_zip_directory_sha256"] = zip_digest.hexdigest()
     else:
         benchmark = Path(benchmark).resolve()
+        locked_files = (
+            "google_benchmark.json", "google_manifest.csv",
+            "google_speaker_splits.csv",
+            "google_dev_enrol.csv", "google_dev_trials.csv",
+            "google_test_enrol.csv", "google_test_trials.csv",
+            "google_ubm_stop.csv", "google_ubm_all_words.csv",
+        )
         signature = {
             "benchmark": str(benchmark),
-            "benchmark_bytes_sha256": hashlib.sha256(
-                (benchmark / "google_benchmark.json").read_bytes()
-            ).hexdigest(),
-            "manifest_bytes_sha256": hashlib.sha256(
-                (benchmark / "google_manifest.csv").read_bytes()
-            ).hexdigest(),
+            "file_sha256": {
+                name: hashlib.sha256((benchmark / name).read_bytes()).hexdigest()
+                for name in locked_files
+            },
         }
     revision = _revision()
     implementation_sha = _implementation_fingerprint()
