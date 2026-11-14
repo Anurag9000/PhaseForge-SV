@@ -39,6 +39,23 @@ jobs:
             --output runs/bonus_competitors_cpu \
             --backends native torchgmm \
             --device cpu --strict
+      - name: Exact identical-parameter Gaussian likelihood parity
+        run: |
+          python -m phaseforge.bonus_identical_scoring \
+            --config configs/bonus_smoke.json \
+            --output runs/bonus_identical_cpu \
+            --backends torchgmm --device cpu
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path('runs/bonus_identical_cpu/cpu_native_smoke/identical_parameter_scoring.json')
+          measured = json.loads(path.read_text())
+          competitor = measured['results']['torchgmm']
+          assert competitor['status'] == 'complete', competitor
+          assert competitor['max_abs_logp_diff'] < 1e-3, competitor
+          print('Identical TorchGMM native parameters: max log-p delta:',
+                competitor['max_abs_logp_diff'])
+          PY
       - name: Upload measured results even on failure
         if: always()
         uses: actions/upload-artifact@v4
@@ -47,4 +64,5 @@ jobs:
           path: |
             runs/bonus_competitors_cpu/*.csv
             runs/bonus_competitors_cpu/*.json
+            runs/bonus_identical_cpu/**/*.json
           if-no-files-found: warn
