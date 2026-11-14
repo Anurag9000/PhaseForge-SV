@@ -379,3 +379,61 @@ def test_phase_cache_self_heals_after_interrupted_write(tiny_kaggle):
         again = extract_features(data, ["b0_0"], cfg, cache, torch.device("cpu"))
         assert torch.isfinite(again["b0_0"]).all()
         assert path.stat().st_size > len(b"interrupted-cache")
+
+
+
+def test_bonus_exact_accelerated_scoring_on_real_synthetic_wavs(tiny_kaggle):
+    """One trained UBM, identical dev enrolment and trial scores, no eval access."""
+    from phaseforge.bonus_end_to_end import compare_scoring
+    import torch
+    import json
+
+    settings = {
+        "feature":{"mode":"group","bands":8},
+        "em":{"mixtures":2,"iterations":3,"reg":.05,"chunk":32},
+        "map":{"relevance":4},
+        "score":{"norm":"none","implementation":"reference"},
+        "transform":"pca","dimensions":4,"seeds":[2026],
+        "save_model":True, "evaluate_eval":False,
+        "max_frames_per_background_file":8,"device":"cpu",
+    }
+    trained = tiny_kaggle / "bonus_baseline"
+    result = run(tiny_kaggle, RunConfig.from_dict(settings), trained)
+    assert result["metrics"]["eer"] >= 0
+    comparison = compare_scoring(
+        tiny_kaggle, trained/"model_seed_2026.pt",
+        tiny_kaggle/"bonus_pair_speed", device_name="cpu",
+        repeats=2, frame_chunk=4, speaker_chunk=2,
+    )
+    assert comparison["exact_parity_within_2e_4"]
+    assert comparison["max_absolute_score_difference"] < 2e-4
+    assert comparison["scoring"]["reference"]["development"]["eer"] == comparison[
+        "scoring"]["batched"]["development"]["eer"]
+    assert (tiny_kaggle/"bonus_pair_speed/scoring_comparison.json").is_file()
+
+
+def test_bonus_end_to_end_smoke_uses_only_development_trials(tiny_kaggle):
+    from phaseforge.bonus_end_to_end import run_ablation
+    import json
+    config = {
+        "feature":{"mode":"group","bands":8},
+        "em":{"mixtures":2,"iterations":3,"reg":.05,"chunk":32},
+        "map":{"relevance":4},"score":{"norm":"none"},
+        "transform":"pca","dimensions":4,"seeds":[2026],
+        "max_frames_per_background_file":8,"device":"cpu",
+    }
+    source = tiny_kaggle/"bonus_base.json"
+    source.write_text(json.dumps(config))
+    manifest = {"base_config":str(source),"jobs":[
+        {"id":"reference","overrides":{"score.implementation":"reference"}},
+        {"id":"batched","overrides":{"score.implementation":"batched"}},
+    ]}
+    destination = tiny_kaggle/"bonus_ablation"
+    result = run_ablation(tiny_kaggle, manifest, destination, strict=True)
+    assert result["complete"] == 2
+    assert result["failed"] == 0
+    for name in ("reference","batched"):
+        job = destination/"jobs"/name
+        assert (job/"development_scores.csv").exists()
+        assert not (job/"evaluation_scores.csv").exists()
+        assert not (job/"submission.csv").exists()
