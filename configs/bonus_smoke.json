@@ -1,0 +1,22 @@
+{
+  "schema": "phaseforge_bonus_v1",
+  "cases": [
+    {
+      "name": "cpu_native_smoke",
+      "source": "synthetic",
+      "frames": 180,
+      "dimensions": 4,
+      "mixtures": 2,
+      "covariance": "diag",
+      "iterations": 3,
+      "reg": 0.05,
+      "seed": 2026,
+      "repeats": 1,
+      "eval_frames": 60,
+      "regime": "separated",
+      "dtype": "float32",
+      "init": "kmeans",
+      "frame_chunk": 64
+    }
+  ]
+}
