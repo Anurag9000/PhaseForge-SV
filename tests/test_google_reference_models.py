@@ -123,3 +123,59 @@ def test_google_word_specific_background_ubm(original_google_research, tmp_path)
     assert result["research_only"]
     assert result["method"] == "passphrase_ubm"
     assert (out / "development_scores.csv").exists()
+
+
+
+def test_new_google_suite_uses_locked_enrolment_and_two_take_episodes(
+    original_google_research, tmp_path,
+):
+    """Old Kaggle-3 configs may not define Google-1 protocol by accident."""
+    import json
+    from phaseforge.new_suite import execute_new_suite
+
+    corpus, benchmark = original_google_research
+    gmm_path = tmp_path / "kaggle_origin_gmm.json"
+    gmm_path.write_text(json.dumps({
+        "feature":{"mode":"group","bands":8},
+        "em":{"mixtures":2,"iterations":3,"reg":.05,"chunk":32},
+        "map":{"relevance":4},
+        "score":{"norm":"none"},
+        "transform":"pca","dimensions":4,
+        "seeds":[2026], "enrolment_size":3,
+        "max_background_files":20,
+        "max_frames_per_background_file":4,
+        "evaluate_eval":True,"device":"cpu",
+    }))
+    neural_path = tmp_path / "kaggle_origin_neural.json"
+    neural_path.write_text(json.dumps({
+        "feature":{"mode":"group","bands":8},
+        "architecture":{"name":"xvector","channels":16,
+                        "embedding":8,"depth":1},
+        "objective":"ge2e",
+        "epochs":1,"steps_per_epoch":1,
+        "speakers_per_batch":2,"takes_per_speaker":3,
+        "max_frames":16,"device":"cpu",
+        "evaluate_locked_test":True,
+    }))
+    registry = {"suite_family":"new_phase_research", "jobs":[
+        {"id":"phase_gmm_google", "kind":"gmm_phase", "config":str(gmm_path)},
+        {"id":"phase_ge2e_google", "kind":"neural_sv", "config":str(neural_path)},
+    ]}
+    results = execute_new_suite(
+        corpus, registry, tmp_path / "research_google_suite",
+        track="google", benchmark=benchmark, strict=True,
+    )
+    assert results["completed"] == 2
+    assert results["failed"] == 0
+    assert results["speaker_verification_ranked"]
+    assert len(results["speaker_verification_ranked"]) == 2
+    ledger = json.loads(
+        (tmp_path / "research_google_suite/new_suite_ledger.json").read_text()
+    )
+    assert ledger["phase_gmm_google"]["config"]["enrolment_size"] == 1
+    assert ledger["phase_ge2e_google"]["config"]["takes_per_speaker"] == 2
+    for entry in ledger.values():
+        directory = tmp_path / "research_google_suite/jobs"
+        job = next(directory.glob("*_" + entry["id"]))
+        assert not (job / "evaluation_scores.csv").exists()
+        assert not (job / "submission.csv").exists()
