@@ -1,7 +1,7 @@
 {
   "suite_family": "new_phase_research",
   "version": 1,
-  "description": "New families omitted from original PhaseForge-SV 36-job suite. Kaggle research only; no neural/PLDA/keyword model is eligible for mandatory GMM-UBM submission. Google keyword experiments separate.",
+  "description": "New families omitted from original PhaseForge-SV 36-job suite. Kaggle research only; no neural/PLDA/keyword model is eligible for mandatory GMM-UBM submission. Google keyword experiments separate. Includes 2D braided topology, phase-specific cepstral variants, adaptive S-norm and MathWorks-inspired speech-region ablations.",
   "jobs": [
     {
       "id": "bcnn_aam",
@@ -942,6 +942,148 @@
       "config": "configs/new_calibration.json",
       "overrides": {},
       "source_job": "mathworks_phase_40ms_global_map_all"
+    },
+    {
+      "id": "phase_unwrapped_cepstra",
+      "kind": "gmm_phase",
+      "config": "configs/new_mathworks_phase_gmm.json",
+      "overrides": {
+        "feature.mode": "unwrap_phase_cepstrum"
+      }
+    },
+    {
+      "id": "phase_ifcc_surrogate",
+      "kind": "gmm_phase",
+      "config": "configs/new_mathworks_phase_gmm.json",
+      "overrides": {
+        "feature.mode": "ifcc_surrogate"
+      }
+    },
+    {
+      "id": "phase_cnpcc_surrogate",
+      "kind": "gmm_phase",
+      "config": "configs/new_mathworks_phase_gmm.json",
+      "overrides": {
+        "feature.mode": "cnpcc_surrogate"
+      }
+    },
+    {
+      "id": "phase_apcc_surrogate",
+      "kind": "gmm_phase",
+      "config": "configs/new_mathworks_phase_gmm.json",
+      "overrides": {
+        "feature.mode": "apcc_surrogate"
+      }
+    },
+    {
+      "id": "phase_flux_derivative",
+      "kind": "gmm_phase",
+      "config": "configs/new_mathworks_phase_gmm.json",
+      "overrides": {
+        "feature.mode": "phase_flux"
+      }
+    },
+    {
+      "id": "adaptive_s_norm",
+      "kind": "gmm_phase",
+      "config": "configs/new_mathworks_phase_gmm.json",
+      "overrides": {
+        "score.norm": "adaptive_s",
+        "score.cohort_top_k": 12
+      }
+    },
+    {
+      "id": "adaptive_s_norm_5",
+      "kind": "gmm_phase",
+      "config": "configs/new_mathworks_phase_gmm.json",
+      "overrides": {
+        "score.norm": "adaptive_s",
+        "score.cohort_top_k": 5
+      }
+    },
+    {
+      "id": "peak_normalization_ablation",
+      "kind": "gmm_phase",
+      "config": "configs/new_mathworks_phase_gmm.json",
+      "overrides": {
+        "feature.peak_normalize": false
+      }
+    },
+    {
+      "id": "speech_region_ablation",
+      "kind": "gmm_phase",
+      "config": "configs/new_mathworks_phase_gmm.json",
+      "overrides": {
+        "feature.trim_longest_region": false
+      }
+    },
+    {
+      "id": "different_band_count",
+      "kind": "gmm_phase",
+      "config": "configs/new_mathworks_phase_gmm.json",
+      "overrides": {
+        "feature.bands": 32
+      }
+    },
+    {
+      "id": "phase_median_5",
+      "kind": "gmm_phase",
+      "config": "configs/new_mathworks_phase_gmm.json",
+      "overrides": {
+        "score.smoothing": 5
+      }
+    },
+    {
+      "id": "bcnn_2d_aam",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "bcnn_2d",
+        "architecture.depth": 4,
+        "objective": "aam",
+        "score": "cosine"
+      }
+    },
+    {
+      "id": "bcnn_2d_ge2e",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "bcnn_2d",
+        "architecture.depth": 4,
+        "objective": "ge2e",
+        "score": "cosine"
+      }
+    },
+    {
+      "id": "bcnn_2d_pairwise",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "bcnn_2d",
+        "architecture.depth": 4,
+        "objective": "pairwise",
+        "score": "pairwise"
+      }
+    },
+    {
+      "id": "google_keyword_bcnn_2d",
+      "kind": "keyword_google",
+      "config": "configs/new_keyword_base.json",
+      "overrides": {
+        "architecture.name": "bcnn_2d",
+        "architecture.depth": 4
+      },
+      "tracks": [
+        "google"
+      ]
+    },
+    {
+      "id": "calibrate_bcnn_2d",
+      "kind": "calibrate",
+      "config": "configs/new_calibration.json",
+      "overrides": {},
+      "source_job": "bcnn_2d_aam"
     }
   ]
 }
