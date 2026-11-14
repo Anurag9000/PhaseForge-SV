@@ -10,6 +10,7 @@ import copy
 import hashlib
 import json
 import math
+import os
 import random
 import time
 from collections import defaultdict
@@ -148,7 +149,16 @@ def augment_phase_features(
 def train_phase_network(
     store: dict[str, torch.Tensor], background_rows: list[dict],
     config: NeuralRun, device: torch.device,
+    checkpoint_file: str | Path | None = None,
+    max_epochs_this_invocation: int | None = None,
+    source_tag: str = "background_research",
 ) -> tuple[PhaseSpeakerEncoder, PairVerifier | None, dict]:
+    """Train, with atomic at-least-once epoch checkpoints when a path is provided.
+
+    A resumed job restores all optimizers, heads, EMA teacher, random generator
+    states and history. An inconsistent source/code/config fingerprint triggers
+    a fresh run rather than reusing incompatible model weights.
+    """
     config.validate()
     torch.manual_seed(config.seed)
     random.seed(config.seed)
@@ -190,7 +200,52 @@ def train_phase_network(
                                   weight_decay=config.weight_decay)
     rng = random.Random(config.seed)
     history = []
-    for epoch in range(config.epochs):
+    source_files = (
+        "new_neural_runner.py", "new_architectures.py",
+        "new_objectives.py", "features.py", "sampling.py",
+    )
+    signature = hashlib.sha256()
+    for name in source_files:
+        signature.update((Path(__file__).parent / name).read_bytes())
+    identity = hashlib.sha256(json.dumps({
+        "source_tag": source_tag, "config": asdict(config),
+        "background": sorted(
+            (row["file_id"], row["speaker_id"]) for row in background_rows
+        ), "source_sha256": signature.hexdigest(),
+    }, sort_keys=True).encode()).hexdigest()
+    checkpoint = Path(checkpoint_file) if checkpoint_file is not None else None
+    start_epoch = 0
+    if checkpoint is not None and checkpoint.exists():
+        saved = torch.load(checkpoint, map_location=device, weights_only=True)
+        if saved.get("identity") == identity:
+            encoder.load_state_dict(saved["encoder"])
+            classifier.load_state_dict(saved["classifier"])
+            aam.load_state_dict(saved["aam"])
+            ge2e.load_state_dict(saved["ge2e"])
+            predictor.load_state_dict(saved["predictor"])
+            if pair is not None:
+                pair.load_state_dict(saved["pair"])
+            if teacher is not None:
+                teacher.load_state_dict(saved["teacher"])
+            optimizer.load_state_dict(saved["optimizer"])
+            history = list(saved["history"])
+            start_epoch = int(saved["next_epoch"])
+            if not 0 <= start_epoch <= config.epochs or len(history) != start_epoch:
+                raise ValueError("Invalid resumed neural epoch history")
+            rng.setstate(saved["python_rng"])
+            torch.set_rng_state(saved["torch_rng"].cpu())
+            if device.type == "cuda" and saved.get("cuda_rng") is not None:
+                torch.cuda.set_rng_state_all(saved["cuda_rng"])
+            print(
+                f"Resumed {config.architecture.name}/{config.objective} "
+                f"from completed epoch {start_epoch}", flush=True
+            )
+    stop_epoch = config.epochs
+    if max_epochs_this_invocation is not None:
+        if max_epochs_this_invocation < 1:
+            raise ValueError("max_epochs_this_invocation must be positive")
+        stop_epoch = min(stop_epoch, start_epoch + max_epochs_this_invocation)
+    for epoch in range(start_epoch, stop_epoch):
         encoder.train()
         losses = []
         batches = speaker_batches(
@@ -281,6 +336,25 @@ def train_phase_network(
                             old.copy_(new)
             losses.append(float(loss.detach()))
         history.append(sum(losses) / len(losses))
+        if checkpoint is not None:
+            checkpoint.parent.mkdir(parents=True, exist_ok=True)
+            state = {
+                "identity": identity, "next_epoch": epoch + 1,
+                "history": list(history),
+                "encoder": encoder.state_dict(),
+                "classifier": classifier.state_dict(),
+                "aam": aam.state_dict(), "ge2e": ge2e.state_dict(),
+                "predictor": predictor.state_dict(),
+                "teacher": teacher.state_dict() if teacher is not None else None,
+                "pair": pair.state_dict() if pair is not None else None,
+                "optimizer": optimizer.state_dict(),
+                "python_rng": rng.getstate(), "torch_rng": torch.get_rng_state(),
+                "cuda_rng": torch.cuda.get_rng_state_all()
+                    if device.type == "cuda" else None,
+            }
+            temporary = checkpoint.with_suffix(".partial")
+            torch.save(state, temporary)
+            os.replace(temporary, checkpoint)
         print(f"architecture={config.architecture.name} objective={config.objective} "
               f"epoch={epoch+1}/{config.epochs} loss={history[-1]:.4f}", flush=True)
     encoder.eval()
@@ -290,7 +364,8 @@ def train_phase_network(
         "model": {k: v.detach().cpu() for k, v in encoder.state_dict().items()},
         "pair": ({k: v.detach().cpu() for k, v in pair.state_dict().items()}
                  if pair is not None else None),
-        "loss_history": history, "speaker_count": len(speaker_names),
+        "loss_history": history, "completed_epochs": len(history),
+        "speaker_count": len(speaker_names),
         "training_utterances": len(background_rows),
         "objective_state": {
             "classifier": {k: v.detach().cpu() for k, v in classifier.state_dict().items()}
@@ -410,7 +485,11 @@ def run_neural(
     )
     if isinstance(data, KaggleData):
         data.close()
-    encoder, pair, trained = train_phase_network(features, background, config, device)
+    encoder, pair, trained = train_phase_network(
+        features, background, config, device,
+        checkpoint_file=out / "training_epoch_checkpoint.pt",
+        source_tag=f"{track}:{Path(root).resolve()}",
+    )
     embeddings = compute_embeddings(encoder, features, device)
     k = (3 if track == "kaggle" else int(protocol["enrolment_takes_per_speaker"]))
     # The benchmark specifies enrolment size. Never tune this on hidden trials.
