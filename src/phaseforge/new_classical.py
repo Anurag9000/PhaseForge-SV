@@ -159,7 +159,11 @@ class TwoCovariancePLDA:
             torch.cat((self.C, self.B), -1),
             torch.cat((self.B, self.C), -1)
         ], dim=0)
-        self.joint_chol = torch.linalg.cholesky(joint + 1e-4 * identity.repeat(2, 2))
+        # Covariance jitter must affect only the diagonal of the 2D-by-2D
+        # joint model. identity.repeat(2,2) would accidentally introduce
+        # off-diagonal cross-speaker covariance.
+        joint_eye = torch.eye(2 * dim, device=X.device, dtype=X.dtype)
+        self.joint_chol = torch.linalg.cholesky(joint + 1e-4 * joint_eye)
         self.single_chol = torch.linalg.cholesky(self.C + 1e-4 * identity)
         return self
 
