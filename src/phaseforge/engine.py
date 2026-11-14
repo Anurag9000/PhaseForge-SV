@@ -431,10 +431,21 @@ def run(
         torch.cuda.synchronize(device)
         torch.cuda.reset_peak_memory_stats(device)
     t0 = time.perf_counter()
+    stage_seconds = {
+        "feature_extraction": 0., "background_transform": 0.,
+        "background_frame_sampling": 0., "gmm_fit": 0.,
+        "map_enrolment": 0., "development_scoring_including_cohorts": 0.,
+        "evaluation_scoring_including_cohorts": 0.,
+    }
+    stage_start = t0
     features = extract_features(
         data, ids, config.feature, output.parent / ".phase_cache", device
     )
     data.close() if isinstance(data, KaggleData) else None
+    if device.type == "cuda":
+        torch.cuda.synchronize(device)
+    stage_seconds["feature_extraction"] = time.perf_counter() - stage_start
+    stage_start = time.perf_counter()
     if config.transform in ("speaker_cnn", "contrastive_cnn"):
         from .learned import PhaseEncoderConfig, learn_phase_encoder
         learned_cfg = dict(config.learned)
@@ -453,11 +464,18 @@ def run(
         )
     del features
     transformed = {key: value.to(device) for key, value in transformed.items()}
+    if device.type == "cuda":
+        torch.cuda.synchronize(device)
+    stage_seconds["background_transform"] = time.perf_counter() - stage_start
+    stage_start = time.perf_counter()
     speaker_by_file = {row["file_id"]: row["speaker_id"] for row in bg}
     pool = _background_frames(
         transformed, bg_ids, config.max_frames_per_background_file, device,
         speaker_by_file=speaker_by_file, strategy=config.background_sampling,
     )
+    if device.type == "cuda":
+        torch.cuda.synchronize(device)
+    stage_seconds["background_frame_sampling"] = time.perf_counter() - stage_start
     labels = torch.tensor([int(row["label"]) for row in dev_trials], device="cpu")
     dev_per_seed, eval_per_seed, diagnostics = [], [], []
     after_ensemble = (
@@ -468,10 +486,19 @@ def run(
     for seed in config.seeds:
         set_seed(seed)
         em = replace(config.em, seed=seed)
+        stage_start = time.perf_counter()
         trained = TorchGMM(em).fit(pool)
+        if device.type == "cuda":
+            torch.cuda.synchronize(device)
+        stage_seconds["gmm_fit"] += time.perf_counter() - stage_start
+        stage_start = time.perf_counter()
         adapted_dev = enrolled_models(
             trained, transformed, dev_enrol, config.map, config.enrolment_size
         )
+        if device.type == "cuda":
+            torch.cuda.synchronize(device)
+        stage_seconds["map_enrolment"] += time.perf_counter() - stage_start
+        stage_start = time.perf_counter()
         raw_dev = score_trials(trained, transformed, dev_trials, adapted_dev, config.score)
         if config.score.norm != "none":
             cohort_seed = config.score.cohort_seed if after_ensemble else seed
@@ -492,7 +519,13 @@ def run(
         else:
             dev = raw_dev
         dev_per_seed.append(dev.cpu())
+        if device.type == "cuda":
+            torch.cuda.synchronize(device)
+        stage_seconds["development_scoring_including_cohorts"] += (
+            time.perf_counter() - stage_start
+        )
         if config.evaluate_eval:
+            stage_start = time.perf_counter()
             adapted_eval = enrolled_models(
                 trained, transformed, eval_enrol, config.map, config.enrolment_size
             )
@@ -513,6 +546,11 @@ def run(
             else:
                 ev = raw_eval
             eval_per_seed.append(ev.cpu())
+            if device.type == "cuda":
+                torch.cuda.synchronize(device)
+            stage_seconds["evaluation_scoring_including_cohorts"] += (
+                time.perf_counter() - stage_start
+            )
         diag = {
             "seed": seed,
             "training_log_likelihood": trained.history[-1],
@@ -627,6 +665,11 @@ def run(
         "locked_google_test_metrics": google_test_metrics,
         "seed_diagnostics": diagnostics,
         "elapsed_seconds": time.perf_counter() - t0,
+        "stage_seconds": stage_seconds,
+        "timing_warning": (
+            "Feature extraction may be warm-cache. Stage durations are "
+            "CUDA-synchronized wall times and exclude some reporting/serialization."
+        ),
         "background_frames": len(pool), "background_utterances": len(bg_ids),
     }
     (output / "result.json").write_text(json.dumps(result, indent=2))
