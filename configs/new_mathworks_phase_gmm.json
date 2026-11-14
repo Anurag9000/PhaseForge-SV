@@ -30,7 +30,7 @@
     "norm": "none",
     "smoothing": 3
   },
-  "transform": "global_pca",
+  "transform": "global_local_pca",
   "dimensions": 24,
   "seeds": [
     2026,
