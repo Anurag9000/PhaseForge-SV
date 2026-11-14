@@ -24,6 +24,7 @@ class EMConfig:
     init_variance_source: str = "full"  # full or initialization
     dead_weight_fraction: float = 0.05
     legacy_pre_mstep_likelihood: bool = False
+    em_impl: str = "reference"  # reference | fused; fused reuses E-step LL
     chunk: int = 2048
     seed: int = 2026
 
@@ -42,6 +43,8 @@ class EMConfig:
             raise ValueError("Invalid initial covariance population")
         if not 0 < self.dead_weight_fraction <= 1:
             raise ValueError("Dead component weight fraction must be in (0,1]")
+        if self.em_impl not in ("reference", "fused"):
+            raise ValueError("EM implementation must be reference or fused")
 
 
 @dataclass(frozen=True)
@@ -175,6 +178,36 @@ class TorchGMM:
                 cross += torch.einsum("nk,nd,ne->kde", resp, block, block)
         return n, first, second, cross
 
+    def _fused_stats_and_ll(
+        self, X: torch.Tensor, with_full_second: bool = False,
+    ):
+        """E-step statistics and pre-M-step LL using one log-density evaluation.
+
+        This is a *numerically matched* EM E-step optimization. The convergence
+        history in fused mode records PRE-update log-likelihood; the reference
+        mode records POST-update log-likelihood. Fixed-iteration comparisons
+        are therefore the most controlled performance experiment.
+        """
+        K, D = self.mu.shape
+        n = torch.zeros(K, device=X.device, dtype=X.dtype)
+        first = torch.zeros(K, D, device=X.device, dtype=X.dtype)
+        second = torch.zeros(K, D, device=X.device, dtype=X.dtype)
+        cross = (torch.zeros(K, D, D, device=X.device, dtype=X.dtype)
+                 if with_full_second else None)
+        total_log_likelihood = torch.zeros((), device=X.device, dtype=X.dtype)
+        for block in X.split(self.config.chunk):
+            components = self.log_components(block)
+            logp = torch.logsumexp(components, dim=1)
+            resp = torch.exp(components - logp[:, None])
+            total_log_likelihood += logp.sum()
+            n += resp.sum(0)
+            first += resp.T @ block
+            second += resp.T @ block.square()
+            if cross is not None:
+                cross += torch.einsum("nk,nd,ne->kde", resp, block, block)
+        return n, first, second, cross, float(total_log_likelihood / len(X))
+
+
     def fit(self, X: torch.Tensor) -> "TorchGMM":
         self.config.validate()
         if X.ndim != 2 or not torch.isfinite(X).all():
@@ -188,12 +221,17 @@ class TorchGMM:
         self.history = []
         self.dead_components = []
         for iteration in range(c.iterations):
-            pre_update_ll = (
-                self.mean_log_prob(X) if c.legacy_pre_mstep_likelihood else None
-            )
-            n, first, second, cross = self.sufficient_statistics(
-                X, with_full_second=(c.covariance == "full")
-            )
+            if c.em_impl == "fused":
+                n, first, second, cross, pre_update_ll = self._fused_stats_and_ll(
+                    X, with_full_second=(c.covariance == "full")
+                )
+            else:
+                pre_update_ll = (
+                    self.mean_log_prob(X) if c.legacy_pre_mstep_likelihood else None
+                )
+                n, first, second, cross = self.sufficient_statistics(
+                    X, with_full_second=(c.covariance == "full")
+                )
             safe = n.clamp_min(1e-8)
             new_mu = first / safe[:, None]
             if c.covariance == "diag":
@@ -238,7 +276,9 @@ class TorchGMM:
                 else self.mean_log_prob(X)
             )
             self.history.append(log_likelihood)
-            minimum_history = 4 if c.legacy_pre_mstep_likelihood else 3
+            minimum_history = (
+                4 if c.legacy_pre_mstep_likelihood or c.em_impl == "fused" else 3
+            )
             if len(self.history) >= minimum_history:
                 improvement = self.history[-1] - self.history[-2]
                 if abs(improvement) <= c.tolerance * max(1.0, abs(self.history[-2])):
