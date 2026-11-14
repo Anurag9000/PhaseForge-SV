@@ -28,6 +28,7 @@ from .new_classical import (
     map_supervector, supervised_lda,
 )
 from .transforms import fit_background_transform
+from .sampling import speaker_aware_subset, passphrase_aware_subset
 
 
 METHODS = ("supervector_cosine", "supervector_svm",
@@ -135,21 +136,28 @@ def run_classical(
         data = GoogleResearchData(root, Path(benchmark) / "google_manifest.csv")
     else:
         raise ValueError("Unsupported track")
-    background = manifests["background"]
-    if config.max_background_files is not None:
-        selected = set(random.Random(config.seed).sample(
-            sorted({r["file_id"] for r in background}),
-            min(len(background), config.max_background_files)
-        ))
-        background = [r for r in background if r["file_id"] in selected]
+    background = list(manifests["background"])
+    if config.method == "passphrase_ubm":
+        # Only the source's locked background speakers are eligible.
+        metadata = {r["file_id"]: r["word"] for r in data.records}
+        background = passphrase_aware_subset(
+            background, metadata, config.max_background_files, config.seed
+        )
+    else:
+        # i-vector/PLDA/SVM validation needs replicated background speakers.
+        background = speaker_aware_subset(
+            background, config.max_background_files, min_takes=2,
+            min_speakers=2, seed=config.seed,
+        )
     if isinstance(data, KaggleData):
         data.assert_background_only([r["file_id"] for r in background])
     source_background = background
     if config.method == "passphrase_ubm":
-        manifest = {r["file_id"]: r for r in data.records}
-        background = [r for r in background if manifest[r["file_id"]]["word"] == "stop"]
-        if not background:
-            raise ValueError("No background stop utterances for passphrase PBM")
+        background = [
+            r for r in background if metadata[r["file_id"]] == "stop"
+        ]
+        if len(background) < config.em.mixtures:
+            raise ValueError("Not enough stop training files for passphrase GMM")
     ids = {r["file_id"] for r in source_background}
     ids.update(r["file_id"] for r in manifests["dev_enrol"])
     ids.update(r["test_file"] for r in manifests["dev_trials"])
