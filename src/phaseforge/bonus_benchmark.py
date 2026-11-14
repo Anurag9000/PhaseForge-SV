@@ -339,8 +339,15 @@ def _run_torchgmm(case, train, held, device, dev):
     estimator.fit(X)
     synchronize(device)
     fit_seconds = time.perf_counter() - start
-    module = estimator.model_
+    # Lightning may move an estimator back to CPU after fitting. For a
+    # GPU inference comparison, explicitly move the fitted low-level model
+    # to the requested device; never silently time CPU inference as CUDA.
+    module = estimator.model_.to(device)
     model_device = module.means.device
+    if model_device != device:
+        raise RuntimeError(
+            f"TorchGMM inference device {model_device} != requested {device}"
+        )
     held_device = held.to(model_device)
     with torch.no_grad():
         _ = module(held_device[:min(20, len(held_device))])[1]
