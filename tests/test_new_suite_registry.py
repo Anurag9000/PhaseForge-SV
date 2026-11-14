@@ -68,3 +68,32 @@ def test_published_family_labels_are_not_aliases_of_only_one_network():
         all_types.add(type(model.blocks[0]).__name__
                       if len(model.blocks) else type(model.sequence).__name__)
     assert len(all_types) >= 6
+
+
+
+def test_matched_seed_expansion_is_complete_and_calibrations_do_not_cross_seeds():
+    import importlib.util
+
+    source = REPO / "scripts/expand_missing_replicates.py"
+    spec = importlib.util.spec_from_file_location("phaseforge_replicates", source)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    registry = json.loads((REPO / "configs/missing_research_suite.json").read_text())
+    expanded = module.expand_replicates(registry, [2026, 3107, 4109])
+    base = len(registry["jobs"])
+    assert len(expanded["jobs"]) == base * 3
+    assert len({j["id"] for j in expanded["jobs"]}) == len(expanded["jobs"])
+
+    ids = set()
+    for job in expanded["jobs"]:
+        seed = job["replication_seed"]
+        assert job["id"].endswith(f"__s{seed}")
+        if job["kind"] == "gmm_phase":
+            assert job["overrides"]["seeds"] == [seed]
+        elif job["kind"] == "calibrate":
+            assert job["source_job"].endswith(f"__s{seed}")
+            assert job["source_job"] in ids
+        else:
+            assert job["overrides"]["seed"] == seed
+        ids.add(job["id"])
