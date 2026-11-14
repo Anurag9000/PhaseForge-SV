@@ -18,7 +18,7 @@ def test_all_new_research_jobs_have_valid_runnable_configs():
     manifest = json.loads((REPO / "configs/missing_research_suite.json").read_text())
     assert manifest["suite_family"] == "new_phase_research"
     jobs = manifest["jobs"]
-    assert len(jobs) == 126
+    assert len(jobs) == 127
     assert len({job["id"] for job in jobs}) == len(jobs)
     counts = {}
     previous = set()
