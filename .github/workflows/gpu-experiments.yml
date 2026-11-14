@@ -6,7 +6,7 @@ on:
         description: Experiment runner
         type: choice
         required: true
-        options: [run, sweep, optimize, suite, proxy, gmm-study, run-alt, robustness, analyze]
+        options: [run, sweep, optimize, suite, suite-new, neural, classical, keyword, mathworks-google, proxy, gmm-study, run-alt, robustness, analyze]
         default: run
       track:
         description: Dataset track (Google is research only)
@@ -19,7 +19,7 @@ on:
         options: [hmm, timebin, dtw, scratch]
         default: hmm
       max_suite_jobs:
-        description: Maximum suite jobs to execute (36 for full registry)
+        description: Max jobs to run (36 original / 126 newly registered)
         type: number
         default: 3
       data_path:
@@ -39,7 +39,7 @@ on:
 jobs:
   train:
     runs-on: [self-hosted, linux, gpu]
-    timeout-minutes: 360
+    timeout-minutes: 1440
     permissions:
       contents: read
     steps:
@@ -76,6 +76,11 @@ jobs:
             gmm-study) test "$SOURCE_TRACK" = kaggle; python -m phaseforge.cli gmm-study --data "$SOURCE_DATA_PATH" --config "$EXPERIMENT_CONFIG" --output "$OUTPUT" --seeds 20 ;;
             optimize) test "$SOURCE_TRACK" = kaggle; python -m phaseforge.cli optimize --data "$SOURCE_DATA_PATH" --config "$EXPERIMENT_CONFIG" --output "$OUTPUT" ;;
             suite) test "$SOURCE_TRACK" = kaggle; python -m phaseforge.cli suite --data "$SOURCE_DATA_PATH" --config "$EXPERIMENT_CONFIG" --output "$OUTPUT" --max-jobs "$SUITE_JOB_LIMIT" ;;
+            suite-new) python -m phaseforge.cli suite-new --data "$SOURCE_DATA_PATH" --config "$EXPERIMENT_CONFIG" --output "$OUTPUT" --track "$SOURCE_TRACK" --benchmark "$RESEARCH_BENCHMARK" --max-jobs "$SUITE_JOB_LIMIT" ;;
+            neural) python -m phaseforge.cli run-neural --data "$SOURCE_DATA_PATH" --config "$EXPERIMENT_CONFIG" --output "$OUTPUT" --track "$SOURCE_TRACK" --benchmark "$RESEARCH_BENCHMARK" ;;
+            classical) python -m phaseforge.cli run-classical --data "$SOURCE_DATA_PATH" --config "$EXPERIMENT_CONFIG" --output "$OUTPUT" --track "$SOURCE_TRACK" --benchmark "$RESEARCH_BENCHMARK" ;;
+            keyword) test "$SOURCE_TRACK" = google; python -m phaseforge.cli run-keyword --data "$SOURCE_DATA_PATH" --config "$EXPERIMENT_CONFIG" --output "$OUTPUT" --benchmark "$RESEARCH_BENCHMARK" ;;
+            mathworks-google) test "$SOURCE_TRACK" = google; python -m phaseforge.cli run-mathworks-google --data "$SOURCE_DATA_PATH" --config "$EXPERIMENT_CONFIG" --output "$OUTPUT" --benchmark "$RESEARCH_BENCHMARK" ;;
             robustness) test "$SOURCE_TRACK" = kaggle; python -m phaseforge.cli robustness --data "$SOURCE_DATA_PATH" --run runs/baseline --output "$OUTPUT" ;;
             analyze) python -m phaseforge.cli analyze --scores runs/baseline/development_scores.csv --output "$OUTPUT" ;;
             *) echo 'Invalid experiment'; exit 1 ;;
