@@ -1,0 +1,36 @@
+{
+  "schema": "phaseforge_e2e_bonus_v1",
+  "base_config": "configs/kaggle_group.json",
+  "description": "End-to-end Kaggle-dev-only feature/EM/MAP/scoring/speed ablations. These are separate from, and may overlap with, the original experiment suite.",
+  "jobs": [
+    {
+      "id": "group_reference",
+      "overrides": {
+        "em.mixtures": 2,
+        "em.iterations": 3,
+        "seeds": [
+          2026
+        ],
+        "max_background_files": 12,
+        "max_frames_per_background_file": 8,
+        "score.norm": "none"
+      }
+    },
+    {
+      "id": "group_batched_8x256",
+      "overrides": {
+        "score.implementation": "batched",
+        "score.speaker_chunk": 8,
+        "score.frame_chunk": 256,
+        "em.mixtures": 2,
+        "em.iterations": 3,
+        "seeds": [
+          2026
+        ],
+        "max_background_files": 12,
+        "max_frames_per_background_file": 8,
+        "score.norm": "none"
+      }
+    }
+  ]
+}

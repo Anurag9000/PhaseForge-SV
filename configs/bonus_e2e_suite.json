@@ -1,0 +1,178 @@
+{
+  "schema": "phaseforge_e2e_bonus_v1",
+  "base_config": "configs/kaggle_group.json",
+  "description": "End-to-end Kaggle-dev-only feature/EM/MAP/scoring/speed ablations. These are separate from, and may overlap with, the original experiment suite.",
+  "jobs": [
+    {
+      "id": "group_reference",
+      "overrides": {}
+    },
+    {
+      "id": "group_batched_8x256",
+      "overrides": {
+        "score.implementation": "batched",
+        "score.speaker_chunk": 8,
+        "score.frame_chunk": 256
+      }
+    },
+    {
+      "id": "group_batched_16x1024",
+      "overrides": {
+        "score.implementation": "batched",
+        "score.speaker_chunk": 16,
+        "score.frame_chunk": 1024
+      }
+    },
+    {
+      "id": "group_batched_32x2048",
+      "overrides": {
+        "score.implementation": "batched",
+        "score.speaker_chunk": 32,
+        "score.frame_chunk": 2048
+      }
+    },
+    {
+      "id": "group_16mix",
+      "overrides": {
+        "em.mixtures": 16
+      }
+    },
+    {
+      "id": "group_64mix",
+      "overrides": {
+        "em.mixtures": 64
+      }
+    },
+    {
+      "id": "group_128mix",
+      "overrides": {
+        "em.mixtures": 128
+      }
+    },
+    {
+      "id": "group_em_random",
+      "overrides": {
+        "em.init": "random"
+      }
+    },
+    {
+      "id": "group_em_kmeans",
+      "overrides": {
+        "em.init": "kmeans"
+      }
+    },
+    {
+      "id": "group_reg_0p005",
+      "overrides": {
+        "em.reg": 0.005
+      }
+    },
+    {
+      "id": "group_reg_0p05",
+      "overrides": {
+        "em.reg": 0.05
+      }
+    },
+    {
+      "id": "group_map_r4",
+      "overrides": {
+        "map.relevance": 4
+      }
+    },
+    {
+      "id": "group_map_r16",
+      "overrides": {
+        "map.relevance": 16
+      }
+    },
+    {
+      "id": "group_map_all",
+      "overrides": {
+        "map.adapt_variances": true,
+        "map.adapt_weights": true
+      }
+    },
+    {
+      "id": "group_enrol1",
+      "overrides": {
+        "enrolment_size": 1
+      }
+    },
+    {
+      "id": "group_enrol2",
+      "overrides": {
+        "enrolment_size": 2
+      }
+    },
+    {
+      "id": "group_40ms",
+      "overrides": {
+        "feature.win": 640,
+        "feature.n_fft": 1024
+      }
+    },
+    {
+      "id": "group_vad_minus25",
+      "overrides": {
+        "feature.vad_db": -25
+      }
+    },
+    {
+      "id": "group_cmvn_partial",
+      "overrides": {
+        "feature.normalization": "partial",
+        "feature.mean_strength": 0.5,
+        "feature.std_strength": 0.5
+      }
+    },
+    {
+      "id": "group_temporal",
+      "overrides": {
+        "feature.mode": "temporal"
+      }
+    },
+    {
+      "id": "group_cosphase",
+      "overrides": {
+        "feature.mode": "cosphase"
+      }
+    },
+    {
+      "id": "group_smooth3",
+      "overrides": {
+        "score.smoothing": 3
+      }
+    },
+    {
+      "id": "group_top8",
+      "overrides": {
+        "score.top_components": 8
+      }
+    },
+    {
+      "id": "group_snorm",
+      "overrides": {
+        "score.norm": "s"
+      }
+    },
+    {
+      "id": "group_adaptive_snorm",
+      "overrides": {
+        "score.norm": "adaptive_s",
+        "score.cohort_top_k": 10
+      }
+    },
+    {
+      "id": "group_frame8",
+      "overrides": {
+        "max_frames_per_background_file": 8
+      }
+    },
+    {
+      "id": "group_frame64",
+      "overrides": {
+        "max_frames_per_background_file": 64
+      }
+    }
+  ]
+}
