@@ -19,7 +19,7 @@ on:
         options: [hmm, timebin, dtw, scratch]
         default: hmm
       max_suite_jobs:
-        description: Max jobs to run (36 original / 126 newly registered)
+        description: Max jobs to run (36 original / 127 newly registered)
         type: number
         default: 3
       data_path:
