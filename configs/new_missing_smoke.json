@@ -1,0 +1,72 @@
+{
+  "suite_family": "new_phase_research",
+  "version": 1,
+  "description": "Fast 4-job synthetic-like real Kaggle smoke test; never uses Google data.",
+  "jobs": [
+    {
+      "id": "smoke_bcnn2d_ge2e",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "bcnn_2d",
+        "architecture.channels": 16,
+        "architecture.embedding": 16,
+        "architecture.depth": 1,
+        "objective": "ge2e",
+        "epochs": 1,
+        "steps_per_epoch": 2,
+        "speakers_per_batch": 3,
+        "takes_per_speaker": 2,
+        "max_background_files": 60,
+        "max_frames": 64
+      }
+    },
+    {
+      "id": "smoke_xvector_aam",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "xvector",
+        "architecture.channels": 16,
+        "architecture.embedding": 16,
+        "architecture.depth": 1,
+        "objective": "aam",
+        "epochs": 1,
+        "steps_per_epoch": 2,
+        "speakers_per_batch": 3,
+        "takes_per_speaker": 2,
+        "max_background_files": 60,
+        "max_frames": 64
+      }
+    },
+    {
+      "id": "smoke_supervector",
+      "kind": "classical_sv",
+      "config": "configs/new_classical_base.json",
+      "overrides": {
+        "method": "supervector_cosine",
+        "em.mixtures": 4,
+        "em.iterations": 4,
+        "dimensions": 8,
+        "max_background_files": 60,
+        "frame_cap": 8
+      }
+    },
+    {
+      "id": "smoke_mathworks_phase",
+      "kind": "gmm_phase",
+      "config": "configs/new_mathworks_phase_gmm.json",
+      "overrides": {
+        "em.mixtures": 4,
+        "em.iterations": 4,
+        "seeds": [
+          2026
+        ],
+        "dimensions": 8,
+        "max_background_files": 60,
+        "max_frames_per_background_file": 8,
+        "score.norm": "none"
+      }
+    }
+  ]
+}
