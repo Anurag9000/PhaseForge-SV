@@ -58,3 +58,32 @@ def speaker_aware_subset(
     rng.shuffle(remainder)
     selected.update(remainder[:max(0, max_files - len(selected))])
     return [row for row in rows if row["file_id"] in selected]
+
+
+
+def passphrase_aware_subset(
+    rows: list[dict], words_by_file: dict[str, str],
+    max_files: int | None, seed: int = 2026,
+) -> list[dict]:
+    """Reserve half the bounded training budget for actual 'stop' examples.
+
+    Include other-word examples only from the chosen original background
+    speakers, never from held-out enrolment or test. A full uncapped run
+    retains the original background manifest.
+    """
+    if max_files is None:
+        return list(rows)
+    if max_files < 4:
+        raise ValueError("Passphrase background cap requires >=4 recordings")
+    stops = [r for r in rows if words_by_file.get(r["file_id"]) == "stop"]
+    stop_budget = max(2, max_files // 2)
+    selected_stops = speaker_aware_subset(
+        stops, stop_budget, min_takes=1, min_speakers=2, seed=seed
+    )
+    chosen_speakers = {r["speaker_id"] for r in selected_stops}
+    included = {r["file_id"] for r in selected_stops}
+    other = [r["file_id"] for r in rows if r["speaker_id"] in chosen_speakers
+             and r["file_id"] not in included]
+    random.Random(seed + 1).shuffle(other)
+    included.update(other[:max(0, max_files - len(included))])
+    return [r for r in rows if r["file_id"] in included]
