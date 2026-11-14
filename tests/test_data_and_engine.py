@@ -273,8 +273,9 @@ def test_new_classical_real_wav_pipeline_methods(tiny_kaggle, method):
 
 
 
-def test_new_heterogeneous_suite_executes_and_resumes(tiny_kaggle):
-    """New suite remains separate, resumable and dev-only."""
+def test_new_heterogeneous_suite_executes_and_resumes(tiny_kaggle, monkeypatch):
+    """Resume across documentation-only revisions and remain dev-only."""
+    from phaseforge import new_suite
     from phaseforge.new_suite import execute_new_suite
     import json
     root = tiny_kaggle
@@ -301,6 +302,9 @@ def test_new_heterogeneous_suite_executes_and_resumes(tiny_kaggle):
     assert checkpoint.is_file()
     assert not (checkpoint.parent / "submission.csv").exists()
     timestamp = checkpoint.stat().st_mtime_ns
+    # The Git HEAD can change for documentation/tests without changing
+    # executable PhaseForge code. It must NOT force GPU model retraining.
+    monkeypatch.setattr(new_suite, "_revision", lambda: "docs-only-new-commit")
     second = execute_new_suite(root, registry, destination, "kaggle")
     assert second["completed"] == 1
     assert checkpoint.stat().st_mtime_ns == timestamp
