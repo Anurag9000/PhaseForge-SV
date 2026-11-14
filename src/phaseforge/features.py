@@ -33,6 +33,9 @@ class FeatureConfig:
     power: float = 0.7
     multi_modes: tuple[str, ...] = ("group", "temporal")
     multi_windows: tuple[int, ...] = (400, 640)
+    peak_normalize: bool = False
+    trim_longest_region: bool = False
+    speech_region_db: float = -25.0
 
     def validate(self) -> None:
         if self.win > self.n_fft or self.win < 32 or self.hop < 1 or self.bands < 2:
@@ -43,7 +46,9 @@ class FeatureConfig:
             raise ValueError("Normalization strengths must be in [0,1]")
         if self.mode not in (
             "group", "temporal", "ifd", "cosphase", "direct", "group_cepstrum",
-            "modified_group_delay", "lp_residual", "all_pole", "multi"
+            "modified_group_delay", "lp_residual", "all_pole", "multi",
+            "unwrap_phase_cepstrum", "ifcc_surrogate", "cnpcc_surrogate",
+            "apcc_surrogate", "phase_flux"
         ):
             raise ValueError(f"Unknown phase mode: {self.mode}")
 
@@ -99,6 +104,41 @@ def _residual(y: torch.Tensor, coeff: torch.Tensor) -> torch.Tensor:
     return result
 
 
+
+
+def longest_speech_region(
+    waveform: torch.Tensor, sample_rate: int, threshold_db: float = -25.0,
+) -> torch.Tensor:
+    """Energy-gated longest contiguous speech-like region.
+
+    Unlike MATLAB detectSpeech this is an explicitly named approximation
+    using non-learned waveform RMS, not a drop-in replica.
+    """
+    frame = max(64, int(sample_rate * .025))
+    hop = max(32, int(sample_rate * .010))
+    if len(waveform) < frame:
+        return waveform
+    windows = waveform.unfold(0, frame, hop)
+    rms = windows.square().mean(-1).sqrt()
+    limit = rms.max().clamp_min(1e-8) * 10 ** (threshold_db / 20)
+    flags = (rms > limit).tolist()
+    longest, start, length = (0, 0), 0, 0
+    for i, flag in enumerate(flags + [False]):
+        if flag:
+            if length == 0:
+                start = i
+            length += 1
+        else:
+            if length > longest[1]:
+                longest = (start, length)
+            length = 0
+    if longest[1] < 2:
+        return waveform
+    begin = longest[0] * hop
+    end = min(len(waveform), (longest[0] + longest[1] - 1) * hop + frame)
+    return waveform[begin:end]
+
+
 class PhaseExtractor:
     def __init__(self, config: FeatureConfig):
         config.validate()
@@ -124,13 +164,16 @@ class PhaseExtractor:
         valid = (mag > maximum * cfg.reliability).float()
         W = mel_bands(X.shape[0], cfg.bands, cfg.sample_rate, y.device)
 
-        if cfg.mode in ("group", "group_cepstrum", "modified_group_delay", "lp_residual"):
+        if cfg.mode in (
+            "group", "group_cepstrum", "modified_group_delay", "lp_residual",
+            "cnpcc_surrogate",
+        ):
             cross = unit[1:] * unit[:-1].conj()
             phase = cross / cross.abs().clamp_min(1e-8)
             mask = valid[1:] * valid[:-1]
             phase = F.pad(phase, (0, 0, 1, 0))
             mask = F.pad(mask, (0, 0, 1, 0))
-        elif cfg.mode in ("temporal", "ifd"):
+        elif cfg.mode in ("temporal", "ifd", "ifcc_surrogate", "phase_flux"):
             advance = (2 * math.pi * cfg.hop / cfg.n_fft) * torch.arange(
                 X.shape[0], device=y.device
             )
@@ -138,7 +181,7 @@ class PhaseExtractor:
             ph = ph / ph.abs().clamp_min(1e-8)
             phase = F.pad(ph, (1, 0))
             mask = F.pad(valid[:, 1:] * valid[:, :-1], (1, 0))
-        elif cfg.mode == "all_pole":
+        elif cfg.mode in ("all_pole", "apcc_surrogate"):
             coefficients = _lp_coefficients(frames, cfg.lpc_order)
             k = torch.arange(1, cfg.lpc_order + 1, device=y.device)
             omega = 2 * math.pi / cfg.n_fft * torch.arange(X.shape[0], device=y.device)
@@ -149,7 +192,7 @@ class PhaseExtractor:
             ph = cross / cross.abs().clamp_min(1e-8)
             phase = F.pad(ph.T, (0, 0, 1, 0))
             mask = valid
-        elif cfg.mode in ("cosphase", "direct"):
+        elif cfg.mode in ("cosphase", "direct", "unwrap_phase_cepstrum"):
             phase = unit
             mask = valid
         else:
@@ -159,14 +202,30 @@ class PhaseExtractor:
             mask.shape[1], cfg.bands, device=y.device
         )
         denom = weights.clamp_min(1e-4)
-        if cfg.mode in ("group_cepstrum", "modified_group_delay", "ifd"):
+        if cfg.mode in (
+            "group_cepstrum", "modified_group_delay", "ifd",
+            "cnpcc_surrogate", "ifcc_surrogate", "apcc_surrogate",
+            "unwrap_phase_cepstrum",
+        ):
             angles = torch.angle(phase)
-            if cfg.mode == "modified_group_delay":
-                # Phase-only robust signed-power group derivative; NOT classic MGD.
+            if cfg.mode == "unwrap_phase_cepstrum":
+                # Unwrap along frequency using wrapped adjacent-bin differences.
+                wrapped = angles[1:] - angles[:-1]
+                delta = torch.atan2(wrapped.sin(), wrapped.cos())
+                angles = torch.cat(
+                    (angles[:1], angles[:1] + delta.cumsum(0)), dim=0
+                )
+                angles = angles - angles.mean(0, keepdim=True)
+            if cfg.mode in ("modified_group_delay", "cnpcc_surrogate"):
+                # CNPCC-like circular-power group phase proxy; NOT a faithful
+                # magnitude-normalized published CNPCC implementation.
                 angles = angles.clamp(-math.pi / 2, math.pi / 2)
                 angles = angles.sign() * angles.abs().pow(cfg.power)
+            if cfg.mode == "modified_group_delay":
+                # Phase-only robust signed-power group derivative; NOT classic MGD.
+                pass
             bands = (angles * mask).T @ W / denom
-            features = _dct(bands) if cfg.mode != "ifd" else bands
+            features = bands if cfg.mode == "ifd" else _dct(bands)
         else:
             co = (phase.real * mask).T @ W / denom
             si = (phase.imag * mask).T @ W / denom
@@ -187,6 +246,10 @@ class PhaseExtractor:
     def __call__(self, waveform: torch.Tensor) -> torch.Tensor:
         cfg = self.config
         y = waveform.float().flatten()
+        if cfg.peak_normalize:
+            y = y / y.abs().max().clamp_min(1e-8)
+        if cfg.trim_longest_region:
+            y = longest_speech_region(y, cfg.sample_rate, cfg.speech_region_db)
         if cfg.mode == "multi":
             base = replace(cfg, mode=cfg.multi_modes[0], win=cfg.multi_windows[0],
                            n_fft=max(512, 2 ** (cfg.multi_windows[0] - 1).bit_length()),
