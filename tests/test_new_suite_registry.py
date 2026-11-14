@@ -97,3 +97,40 @@ def test_matched_seed_expansion_is_complete_and_calibrations_do_not_cross_seeds(
         else:
             assert job["overrides"]["seed"] == seed
         ids.add(job["id"])
+
+
+
+def test_seed_aggregate_separates_keyword_accuracy_and_eer(tmp_path):
+    import importlib.util
+
+    source = REPO / "scripts/summarize_missing_replicates.py"
+    spec = importlib.util.spec_from_file_location("missing_aggregate", source)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    ledger = {
+        "bcnn__s3": {"id":"bcnn__s3", "kind":"neural_sv",
+                      "status":"complete", "development_eer":.05},
+        "bcnn__s5": {"id":"bcnn__s5", "kind":"neural_sv",
+                      "status":"complete", "development_eer":.09},
+        "bcnn__s7": {"id":"bcnn__s7", "kind":"neural_sv",
+                      "status":"failed", "error":"OOM"},
+        "kwt__s3": {"id":"kwt__s3", "kind":"keyword_google",
+                     "status":"complete", "development_accuracy":.8},
+        "kwt__s5": {"id":"kwt__s5", "kind":"keyword_google",
+                     "status":"complete", "development_accuracy":.9},
+    }
+    result = module.aggregate_ledger(ledger, [3, 5, 7])
+    assert len(result["speaker_verification"]) == 1
+    assert len(result["keyword_classification"]) == 1
+    verification = result["speaker_verification"][0]
+    keyword = result["keyword_classification"][0]
+    assert abs(verification["mean"] - .07) < 1e-12
+    assert verification["std"] > 0
+    assert verification["failed"] == 1
+    assert verification["all_expected_seeds_present"] is False
+    assert abs(keyword["mean"] - .85) < 1e-12
+    assert keyword["metric"] == "development_accuracy"
+    module.save_aggregate(result, tmp_path)
+    assert (tmp_path / "replicate_summary.json").exists()
+    assert (tmp_path / "speaker_verification_replicates.csv").exists()
+    assert (tmp_path / "keyword_replicates.csv").exists()
