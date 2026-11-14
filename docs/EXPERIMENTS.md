@@ -71,7 +71,7 @@ completes and saves its score tables, validation protocol and run manifest.
 
 ## New suite correcting earlier omitted methods
 
-The 126 new executable jobs are in `configs/missing_research_suite.json`,
+The 127 new executable jobs are in `configs/missing_research_suite.json`,
 separate from the 36 original jobs. Modules `new_architectures.py`,
 `new_objectives.py`, `new_neural_runner.py`, `new_classical.py`,
 `new_classical_runner.py`, `new_keyword.py`, `google_reference_features.py`,
