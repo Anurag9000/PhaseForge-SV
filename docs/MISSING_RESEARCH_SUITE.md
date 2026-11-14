@@ -171,3 +171,63 @@ completed real-data run saved in this repository.
 
 No external model code or weights were copied into this repository.
 The architectures are independently authored PyTorch research implementations.
+
+
+## Reliability audit and matched-seed research execution
+
+Recent implementation fixes:
+
+- Background caps now preserve complete 2/3-take speaker groups for GE2E,
+  PLDA and SVM, and reserve original stop recordings in passphrase studies.
+- Two-covariance PLDA joint regularization uses diagonal-only jitter.
+- JEPA-like masked context is online-only; BYOL-like prediction is symmetric,
+  EMA BatchNorm buffers are updated and latent-variance regularization added.
+- Global/local background PCA uses bounded frame sampling before concatenation.
+- The new suite uses executable-code/dataset hashes for resume rather than
+  Git revision alone; source-model calibration dependencies are fingerprinted.
+- Neural training saves an atomic per-epoch checkpoint with optimizer state,
+  EMA teacher and CPU/CUDA/Python random-generator states. Interrupted jobs
+  continue from the next completed epoch, unless source/config/data changes.
+- The feature cache fingerprints Kaggle audio ZIP metadata or original Google
+  WAV file metadata and phase extractor code. Cache saves are atomic and
+  invalid/corrupted cache files are rebuilt.
+
+### Execute the original new-method registry
+
+    python3 -m pip install -e '.[dev,plots,search]'
+    python3 -m pytest -q
+    python3 -m phaseforge.cli suite-new --data /absolute/path/to/kaggle \
+      --config configs/new_missing_smoke.json \
+      --output runs/new_missing_smoke --track kaggle --strict
+    bash scripts/run_missing_suite.sh /absolute/path/to/kaggle runs/new_missing 127
+
+### Expand to 3 matched random seeds (381 registry jobs)
+
+    python3 scripts/expand_missing_replicates.py \
+      --source configs/missing_research_suite.json \
+      --output configs/generated_missing_3seed.json \
+      --seeds 2026 3107 4109
+
+    python3 -m phaseforge.cli suite-new \
+      --data /absolute/path/to/kaggle --track kaggle \
+      --config configs/generated_missing_3seed.json \
+      --output runs/new_missing_3seed --max-jobs 381
+
+    python3 scripts/summarize_missing_replicates.py \
+      --ledger runs/new_missing_3seed/new_suite_ledger.json \
+      --output runs/new_missing_3seed/aggregate \
+      --seeds 2026 3107 4109
+
+381 is the registered total (127 x 3), not the number of Kaggle-valid jobs:
+Google-only keyword and magnitude-reference jobs are skipped on Kaggle.
+Resuming with the same output path reuses completed matching jobs.
+The aggregation separates EER from keyword accuracy and displays missing
+seed outcomes rather than assigning a misleading zero standard deviation.
+
+The equivalent original-Google speaker-disjoint research suite uses
+--track google and --benchmark with a locked benchmark directory. Do not
+score its locked test population until a candidate is selected on dev.
+
+CI uses synthetic data and numerical tests. It does NOT demonstrate
+improvement over the prior 4.61% Kaggle development EER. Real-corpus
+training and trial evaluation remain separate necessary steps.
