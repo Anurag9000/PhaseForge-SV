@@ -13,6 +13,7 @@ import math
 import os
 import random
 import time
+import zipfile
 from collections import defaultdict
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -146,6 +147,38 @@ def augment_phase_features(
     return output * valid[:, :, None]
 
 
+def neural_corpus_signature(
+    root: str | Path, track: str, benchmark: str | Path | None = None,
+) -> str:
+    """Bind neural resume to Kaggle audio inventory or locked Google manifest."""
+    root = Path(root).resolve()
+    digest = hashlib.sha256()
+    digest.update(f"{track}:{root}".encode())
+    if track == "kaggle":
+        for name in ("background.csv", "dev_enrol.csv", "dev_trials.csv",
+                     "eval_enrol.csv", "eval_trials.csv"):
+            digest.update((root / name).read_bytes())
+        with zipfile.ZipFile(root / "audio.zip") as archive:
+            for info in sorted(archive.infolist(), key=lambda x: x.filename):
+                digest.update(
+                    f"{info.filename}|{info.file_size}|{info.compress_size}|"
+                    f"{info.CRC:08x}".encode()
+                )
+    elif track == "google":
+        if benchmark is None:
+            raise ValueError("Google resume fingerprint requires benchmark")
+        benchmark = Path(benchmark)
+        for name in (
+            "google_benchmark.json", "google_manifest.csv",
+            "google_dev_enrol.csv", "google_dev_trials.csv",
+            "google_speaker_splits.csv",
+        ):
+            digest.update((benchmark / name).read_bytes())
+    else:
+        raise ValueError("Unknown source track for neural fingerprint")
+    return digest.hexdigest()
+
+
 def train_phase_network(
     store: dict[str, torch.Tensor], background_rows: list[dict],
     config: NeuralRun, device: torch.device,
@@ -235,7 +268,9 @@ def train_phase_network(
             rng.setstate(saved["python_rng"])
             torch.set_rng_state(saved["torch_rng"].cpu())
             if device.type == "cuda" and saved.get("cuda_rng") is not None:
-                torch.cuda.set_rng_state_all(saved["cuda_rng"])
+                torch.cuda.set_rng_state_all([
+                    state.cpu() for state in saved["cuda_rng"]
+                ])
             print(
                 f"Resumed {config.architecture.name}/{config.objective} "
                 f"from completed epoch {start_epoch}", flush=True
@@ -488,7 +523,7 @@ def run_neural(
     encoder, pair, trained = train_phase_network(
         features, background, config, device,
         checkpoint_file=out / "training_epoch_checkpoint.pt",
-        source_tag=f"{track}:{Path(root).resolve()}",
+        source_tag=neural_corpus_signature(root, track, benchmark),
     )
     embeddings = compute_embeddings(encoder, features, device)
     k = (3 if track == "kaggle" else int(protocol["enrolment_takes_per_speaker"]))
