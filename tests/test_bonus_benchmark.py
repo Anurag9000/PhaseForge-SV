@@ -67,7 +67,7 @@ def test_unsupported_smoothing_falls_back_to_reference(speaker_setup):
 def test_fast_mode_does_not_use_labels(speaker_setup):
     bg, features, models, trials = speaker_setup
     config = ScoreConfig(implementation="batched")
-    original = score_trials(bg, features, trials, config)
+    original = score_trials(bg, features, trials, models, config)
     unlabeled = [{k:v for k,v in row.items() if k!="label"} for row in trials]
     assert torch.equal(original, score_trials(bg, features, unlabeled, models, config))
 
