@@ -402,12 +402,69 @@ def _run_cuvs(case, train, held, device, dev, binary, directory):
         "--reg", str(case.reg), "--seed", str(case.seed),
         "--init", case.init,
     ]
-    p = subprocess.run(args, capture_output=True, text=True, timeout=7200)
+    # cuVS allocations are outside PyTorch's CUDA caching allocator.
+    # Sample the process's actual device memory using NVML when available;
+    # a 20-ms poll is an APPROXIMATE peak and may miss short spikes.
+    peak_mib = None
+    monitor_error = None
+    try:
+        import pynvml
+        pynvml.nvmlInit()
+        handles = [
+            pynvml.nvmlDeviceGetHandleByIndex(i)
+            for i in range(pynvml.nvmlDeviceGetCount())
+        ]
+        process_query = getattr(
+            pynvml, "nvmlDeviceGetComputeRunningProcesses_v3",
+            None
+        ) or getattr(
+            pynvml, "nvmlDeviceGetComputeRunningProcesses_v2",
+            None
+        ) or pynvml.nvmlDeviceGetComputeRunningProcesses
+    except Exception as exc:
+        process_query = None
+        handles = []
+        monitor_error = repr(exc)
+    p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                         text=True)
+    deadline = time.monotonic() + 7200
+    try:
+        while p.poll() is None:
+            if time.monotonic() > deadline:
+                p.kill()
+                raise TimeoutError("cuVS benchmark timed out")
+            if process_query is not None:
+                try:
+                    used = 0
+                    for handle in handles:
+                        for proc in process_query(handle):
+                            if proc.pid == p.pid and 0 <= proc.usedGpuMemory < (1 << 63):
+                                used += proc.usedGpuMemory
+                    if used:
+                        peak_mib = max(peak_mib or 0, used / (1024 ** 2))
+                except Exception as exc:
+                    monitor_error = repr(exc)
+                    process_query = None
+            time.sleep(.02)
+        stdout, stderr = p.communicate(timeout=5)
+    finally:
+        if p.poll() is None:
+            p.kill()
+        if handles:
+            try:
+                pynvml.nvmlShutdown()
+            except Exception:
+                pass
     if p.returncode:
         raise RuntimeError(
-            f"cuVS C++ harness exit {p.returncode}: {p.stderr[-1500:]}"
+            f"cuVS C++ harness exit {p.returncode}: {stderr[-1500:]}"
         )
-    result = json.loads(p.stdout.strip().splitlines()[-1])
+    result = json.loads(stdout.strip().splitlines()[-1])
+    result["gpu_process_peak_sampled_mib"] = peak_mib
+    result["gpu_process_peak_sampling_warning"] = (
+        "NVML process memory sampled every 20 ms; may miss short peaks."
+    )
+    result["gpu_process_peak_sampling_error"] = monitor_error
     if not model_path.is_file():
         raise FileNotFoundError("cuVS did not export fitted model")
     K, D = case.mixtures, train.shape[1]
