@@ -158,11 +158,22 @@ def neural_corpus_signature(
         for name in ("background.csv", "dev_enrol.csv", "dev_trials.csv",
                      "eval_enrol.csv", "eval_trials.csv"):
             digest.update((root / name).read_bytes())
-        with zipfile.ZipFile(root / "audio.zip") as archive:
-            for info in sorted(archive.infolist(), key=lambda x: x.filename):
+        if (root / "audio.zip").is_file():
+            with zipfile.ZipFile(root / "audio.zip") as archive:
+                for info in sorted(archive.infolist(), key=lambda x: x.filename):
+                    digest.update(
+                        f"{info.filename}|{info.file_size}|{info.compress_size}|"
+                        f"{info.CRC:08x}".encode()
+                    )
+        else:
+            folder = root / "audio"
+            if not folder.is_dir():
+                raise FileNotFoundError("Missing Kaggle audio.zip or extracted audio/")
+            for file in sorted(folder.rglob("*.wav")):
+                stat = file.stat()
                 digest.update(
-                    f"{info.filename}|{info.file_size}|{info.compress_size}|"
-                    f"{info.CRC:08x}".encode()
+                    f"{file.relative_to(folder)}|{stat.st_size}|"
+                    f"{stat.st_mtime_ns}".encode()
                 )
     elif track == "google":
         if benchmark is None:
