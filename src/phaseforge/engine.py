@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import random
+import zipfile
 import time
 import subprocess
 from collections import defaultdict
@@ -197,10 +199,51 @@ def load_research_manifests(benchmark: str | Path, pool: str = "stop") -> dict:
         raise ValueError("UBM recording appears in research enrolment/test")
     return output
 
-def _cache_name(source: str, root: Path, ids: list[str], feature: FeatureConfig) -> str:
-    spec = json.dumps({"source": source, "root": str(root), "ids": sorted(ids),
-                       "feature": asdict(feature)}, sort_keys=True)
-    return hashlib.sha256(spec.encode()).hexdigest()[:20]
+def _recording_fingerprint(data, ids: list[str]) -> str:
+    """Identify raw audio without decoding it on every resumed experiment.
+
+    ZIP sources: archive member sizes and CRC metadata.
+    Extracted WAV sources: resolved relative path, size and nanosecond mtime.
+    """
+    digest = hashlib.sha256()
+    if isinstance(data, KaggleData) and data.audio_zip.is_file():
+        with zipfile.ZipFile(data.audio_zip) as archive:
+            for item in sorted(archive.infolist(), key=lambda z: z.filename):
+                digest.update(
+                    f"{item.filename}|{item.file_size}|"
+                    f"{item.compress_size}|{item.CRC:08x}\n".encode()
+                )
+    elif isinstance(data, (KaggleData, GoogleResearchData)):
+        files = (
+            list(data.audio_dir.rglob("*.wav"))
+            if isinstance(data, KaggleData) else
+            [data.root / file for file in sorted(set(ids))]
+        )
+        for file in sorted(files):
+            resolved = file.resolve()
+            if not resolved.is_relative_to(data.root):
+                raise PermissionError(f"Recording outside source root: {file}")
+            stat = resolved.stat()
+            digest.update(
+                f"{resolved.relative_to(data.root)}|{stat.st_size}|"
+                f"{stat.st_mtime_ns}\n".encode()
+            )
+    else:
+        raise TypeError("Unsupported phase feature data source")
+    return digest.hexdigest()
+
+
+def _cache_name(data, ids: list[str], feature: FeatureConfig) -> str:
+    code_sha = hashlib.sha256(
+        (Path(__file__).with_name("features.py")).read_bytes()
+    ).hexdigest()
+    spec = json.dumps({
+        "source": data.source, "root": str(data.root), "ids": sorted(set(ids)),
+        "feature": asdict(feature),
+        "recording_sha256": _recording_fingerprint(data, ids),
+        "phase_extraction_code_sha256": code_sha,
+    }, sort_keys=True)
+    return hashlib.sha256(spec.encode()).hexdigest()[:24]
 
 
 def extract_features(
@@ -208,12 +251,18 @@ def extract_features(
 ) -> dict[str, torch.Tensor]:
     """Raw phase extraction only. Learned transforms are fitted later on background IDs."""
     cache_root.mkdir(parents=True, exist_ok=True)
-    name = _cache_name(data.source, data.root, ids, cfg)
+    name = _cache_name(data, ids, cfg)
     cache = cache_root / f"phase_{name}.pt"
     if cache.exists():
-        stored = torch.load(cache, map_location="cpu", weights_only=True)
-        if set(stored) == set(ids):
-            return stored
+        try:
+            stored = torch.load(cache, map_location="cpu", weights_only=True)
+            if set(stored) == set(ids) and all(
+                torch.isfinite(value).all() and value.ndim == 2
+                for value in stored.values()
+            ):
+                return stored
+        except (OSError, EOFError, RuntimeError, ValueError, zipfile.BadZipFile):
+            print(f"Invalid phase cache {cache}; extracting again", flush=True)
     extractor = PhaseExtractor(cfg)
     features = {}
     with torch.no_grad():
@@ -222,7 +271,9 @@ def extract_features(
             features[ident] = extractor(y).cpu()
             if index and index % 500 == 0:
                 print(f"Extracted {index}/{len(ids)} phase utterances", flush=True)
-    torch.save(features, cache)
+    temporary = cache.with_suffix(".partial")
+    torch.save(features, temporary)
+    os.replace(temporary, cache)
     return features
 
 
