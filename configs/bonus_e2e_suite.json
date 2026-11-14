@@ -185,6 +185,49 @@
       "overrides": {
         "max_frames_per_background_file": 64
       }
+    },
+    {
+      "id": "group_stft_batch4",
+      "overrides": {
+        "feature_batch_size": 4
+      }
+    },
+    {
+      "id": "group_stft_batch8",
+      "overrides": {
+        "feature_batch_size": 8
+      }
+    },
+    {
+      "id": "group_stft_batch16",
+      "overrides": {
+        "feature_batch_size": 16
+      }
+    },
+    {
+      "id": "group_stft_batch32",
+      "overrides": {
+        "feature_batch_size": 32
+      }
+    },
+    {
+      "id": "group_stft16_scorebatched",
+      "overrides": {
+        "feature_batch_size": 16,
+        "score.implementation": "batched",
+        "score.speaker_chunk": 16,
+        "score.frame_chunk": 1024
+      }
+    },
+    {
+      "id": "group_full_pipeline_fused",
+      "overrides": {
+        "feature_batch_size": 16,
+        "em.em_impl": "fused",
+        "score.implementation": "batched",
+        "score.speaker_chunk": 16,
+        "score.frame_chunk": 1024
+      }
     }
   ]
 }
