@@ -1221,6 +1221,14 @@
       "tracks": [
         "google"
       ]
+    },
+    {
+      "id": "mathworks_global_without_local_ablation",
+      "kind": "gmm_phase",
+      "config": "configs/new_mathworks_phase_gmm.json",
+      "overrides": {
+        "transform": "global_pca"
+      }
     }
   ]
 }
