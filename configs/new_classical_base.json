@@ -1,0 +1,31 @@
+{
+  "method": "ivector_cosine",
+  "feature": {
+    "mode": "group",
+    "win": 400,
+    "hop": 160,
+    "n_fft": 512,
+    "bands": 24,
+    "normalization": "utterance"
+  },
+  "em": {
+    "mixtures": 16,
+    "covariance": "diag",
+    "init": "kmeans",
+    "iterations": 24,
+    "reg": 0.03
+  },
+  "map": {
+    "relevance": 8
+  },
+  "transform": "pca",
+  "dimensions": 24,
+  "tv_dimension": 16,
+  "tv_iterations": 8,
+  "lda_dimension": 12,
+  "frame_cap": 24,
+  "max_background_files": null,
+  "seed": 2026,
+  "device": "auto",
+  "evaluate_locked_test": false
+}

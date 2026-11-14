@@ -1,0 +1,38 @@
+{
+  "feature": {
+    "mode": "group",
+    "win": 400,
+    "hop": 160,
+    "n_fft": 512,
+    "bands": 24,
+    "normalization": "utterance"
+  },
+  "architecture": {
+    "name": "bcnn",
+    "channels": 64,
+    "embedding": 64,
+    "depth": 4,
+    "heads": 4
+  },
+  "words": [
+    "yes",
+    "no",
+    "up",
+    "down",
+    "left",
+    "right",
+    "on",
+    "off",
+    "stop",
+    "go"
+  ],
+  "epochs": 10,
+  "steps_per_epoch": 100,
+  "batch_size": 32,
+  "max_frames": 128,
+  "max_files_per_split": 5000,
+  "learning_rate": 0.001,
+  "seed": 2026,
+  "device": "auto",
+  "evaluate_locked_test": false
+}

@@ -1,0 +1,947 @@
+{
+  "suite_family": "new_phase_research",
+  "version": 1,
+  "description": "New families omitted from original PhaseForge-SV 36-job suite. Kaggle research only; no neural/PLDA/keyword model is eligible for mandatory GMM-UBM submission. Google keyword experiments separate.",
+  "jobs": [
+    {
+      "id": "bcnn_aam",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "bcnn",
+        "objective": "aam",
+        "score": "cosine"
+      }
+    },
+    {
+      "id": "bcnn_ge2e",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "bcnn",
+        "objective": "ge2e",
+        "score": "cosine"
+      }
+    },
+    {
+      "id": "bcnn_pairwise",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "bcnn",
+        "objective": "pairwise",
+        "score": "pairwise"
+      }
+    },
+    {
+      "id": "xvector_aam",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "xvector",
+        "objective": "aam",
+        "score": "cosine"
+      }
+    },
+    {
+      "id": "xvector_ge2e",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "xvector",
+        "objective": "ge2e",
+        "score": "cosine"
+      }
+    },
+    {
+      "id": "xvector_pairwise",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "xvector",
+        "objective": "pairwise",
+        "score": "pairwise"
+      }
+    },
+    {
+      "id": "ecapa_aam",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "ecapa",
+        "objective": "aam",
+        "score": "cosine"
+      }
+    },
+    {
+      "id": "ecapa_ge2e",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "ecapa",
+        "objective": "ge2e",
+        "score": "cosine"
+      }
+    },
+    {
+      "id": "ecapa_pairwise",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "ecapa",
+        "objective": "pairwise",
+        "score": "pairwise"
+      }
+    },
+    {
+      "id": "res2_ecapa_aam",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "res2_ecapa",
+        "objective": "aam",
+        "score": "cosine"
+      }
+    },
+    {
+      "id": "res2_ecapa_ge2e",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "res2_ecapa",
+        "objective": "ge2e",
+        "score": "cosine"
+      }
+    },
+    {
+      "id": "res2_ecapa_pairwise",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "res2_ecapa",
+        "objective": "pairwise",
+        "score": "pairwise"
+      }
+    },
+    {
+      "id": "resnet_aam",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "resnet",
+        "objective": "aam",
+        "score": "cosine"
+      }
+    },
+    {
+      "id": "resnet_ge2e",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "resnet",
+        "objective": "ge2e",
+        "score": "cosine"
+      }
+    },
+    {
+      "id": "resnet_pairwise",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "resnet",
+        "objective": "pairwise",
+        "score": "pairwise"
+      }
+    },
+    {
+      "id": "se_resnet_aam",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "se_resnet",
+        "objective": "aam",
+        "score": "cosine"
+      }
+    },
+    {
+      "id": "se_resnet_ge2e",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "se_resnet",
+        "objective": "ge2e",
+        "score": "cosine"
+      }
+    },
+    {
+      "id": "se_resnet_pairwise",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "se_resnet",
+        "objective": "pairwise",
+        "score": "pairwise"
+      }
+    },
+    {
+      "id": "ds_cnn_aam",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "ds_cnn",
+        "objective": "aam",
+        "score": "cosine"
+      }
+    },
+    {
+      "id": "ds_cnn_ge2e",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "ds_cnn",
+        "objective": "ge2e",
+        "score": "cosine"
+      }
+    },
+    {
+      "id": "ds_cnn_pairwise",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "ds_cnn",
+        "objective": "pairwise",
+        "score": "pairwise"
+      }
+    },
+    {
+      "id": "tc_resnet_aam",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "tc_resnet",
+        "objective": "aam",
+        "score": "cosine"
+      }
+    },
+    {
+      "id": "tc_resnet_ge2e",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "tc_resnet",
+        "objective": "ge2e",
+        "score": "cosine"
+      }
+    },
+    {
+      "id": "tc_resnet_pairwise",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "tc_resnet",
+        "objective": "pairwise",
+        "score": "pairwise"
+      }
+    },
+    {
+      "id": "crnn_aam",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "crnn",
+        "objective": "aam",
+        "score": "cosine"
+      }
+    },
+    {
+      "id": "crnn_ge2e",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "crnn",
+        "objective": "ge2e",
+        "score": "cosine"
+      }
+    },
+    {
+      "id": "crnn_pairwise",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "crnn",
+        "objective": "pairwise",
+        "score": "pairwise"
+      }
+    },
+    {
+      "id": "kwt_aam",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "kwt",
+        "objective": "aam",
+        "score": "cosine"
+      }
+    },
+    {
+      "id": "kwt_ge2e",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "kwt",
+        "objective": "ge2e",
+        "score": "cosine"
+      }
+    },
+    {
+      "id": "kwt_pairwise",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "kwt",
+        "objective": "pairwise",
+        "score": "pairwise"
+      }
+    },
+    {
+      "id": "conformer_aam",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "conformer",
+        "objective": "aam",
+        "score": "cosine"
+      }
+    },
+    {
+      "id": "conformer_ge2e",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "conformer",
+        "objective": "ge2e",
+        "score": "cosine"
+      }
+    },
+    {
+      "id": "conformer_pairwise",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "conformer",
+        "objective": "pairwise",
+        "score": "pairwise"
+      }
+    },
+    {
+      "id": "ssm_lite_aam",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "ssm_lite",
+        "objective": "aam",
+        "score": "cosine"
+      }
+    },
+    {
+      "id": "ssm_lite_ge2e",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "ssm_lite",
+        "objective": "ge2e",
+        "score": "cosine"
+      }
+    },
+    {
+      "id": "ssm_lite_pairwise",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "ssm_lite",
+        "objective": "pairwise",
+        "score": "pairwise"
+      }
+    },
+    {
+      "id": "cnn_aam",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "cnn",
+        "objective": "aam",
+        "score": "cosine"
+      }
+    },
+    {
+      "id": "cnn_ge2e",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "cnn",
+        "objective": "ge2e",
+        "score": "cosine"
+      }
+    },
+    {
+      "id": "cnn_pairwise",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "cnn",
+        "objective": "pairwise",
+        "score": "pairwise"
+      }
+    },
+    {
+      "id": "xvector_cross_entropy",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "xvector",
+        "objective": "cross_entropy"
+      }
+    },
+    {
+      "id": "xvector_supcon",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "xvector",
+        "objective": "supcon"
+      }
+    },
+    {
+      "id": "xvector_triplet",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "xvector",
+        "objective": "triplet"
+      }
+    },
+    {
+      "id": "xvector_prototype",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "xvector",
+        "objective": "prototype"
+      }
+    },
+    {
+      "id": "xvector_byol",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "xvector",
+        "objective": "byol"
+      }
+    },
+    {
+      "id": "xvector_jepa",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "xvector",
+        "objective": "jepa"
+      }
+    },
+    {
+      "id": "bcnn_supcon",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "bcnn",
+        "objective": "supcon"
+      }
+    },
+    {
+      "id": "ecapa_supcon",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "ecapa",
+        "objective": "supcon"
+      }
+    },
+    {
+      "id": "kwt_supcon",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "kwt",
+        "objective": "supcon"
+      }
+    },
+    {
+      "id": "conformer_supcon",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "conformer",
+        "objective": "supcon"
+      }
+    },
+    {
+      "id": "resnet_supcon",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "resnet",
+        "objective": "supcon"
+      }
+    },
+    {
+      "id": "ds_cnn_supcon",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "ds_cnn",
+        "objective": "supcon"
+      }
+    },
+    {
+      "id": "bcnn_depth2",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "bcnn",
+        "architecture.depth": 2,
+        "objective": "aam"
+      }
+    },
+    {
+      "id": "bcnn_depth6",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "bcnn",
+        "architecture.depth": 6,
+        "objective": "aam"
+      }
+    },
+    {
+      "id": "ecapa_depth4",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "ecapa",
+        "architecture.depth": 4,
+        "objective": "aam"
+      }
+    },
+    {
+      "id": "kwt_depth2",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "kwt",
+        "architecture.depth": 2,
+        "objective": "aam"
+      }
+    },
+    {
+      "id": "kwt_depth4",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "kwt",
+        "architecture.depth": 4,
+        "objective": "aam"
+      }
+    },
+    {
+      "id": "conformer_depth4",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "conformer",
+        "architecture.depth": 4,
+        "objective": "aam"
+      }
+    },
+    {
+      "id": "xvector_quality_scoring",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "xvector",
+        "objective": "ge2e",
+        "score": "quality_cosine"
+      }
+    },
+    {
+      "id": "ecapa_quality_scoring",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "ecapa",
+        "objective": "ge2e",
+        "score": "quality_cosine"
+      }
+    },
+    {
+      "id": "bcnn_quality_scoring",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "bcnn",
+        "objective": "ge2e",
+        "score": "quality_cosine"
+      }
+    },
+    {
+      "id": "bcnn_phase_augmentation_0",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "bcnn",
+        "objective": "aam",
+        "augment_noise": 0,
+        "augment_mask_probability": 0
+      }
+    },
+    {
+      "id": "bcnn_phase_augmentation_3",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "bcnn",
+        "objective": "aam",
+        "augment_noise": 0.03,
+        "augment_mask_probability": 0.15
+      }
+    },
+    {
+      "id": "ecapa_phase_augmentation_0",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "ecapa",
+        "objective": "aam",
+        "augment_noise": 0,
+        "augment_mask_probability": 0
+      }
+    },
+    {
+      "id": "ecapa_phase_augmentation_3",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "ecapa",
+        "objective": "aam",
+        "augment_noise": 0.03,
+        "augment_mask_probability": 0.15
+      }
+    },
+    {
+      "id": "xvector_phase_augmentation_6",
+      "kind": "neural_sv",
+      "config": "configs/new_neural_base.json",
+      "overrides": {
+        "architecture.name": "xvector",
+        "objective": "aam",
+        "augment_noise": 0.06,
+        "augment_mask_probability": 0.15
+      }
+    },
+    {
+      "id": "supervector_cosine_group",
+      "kind": "classical_sv",
+      "config": "configs/new_classical_base.json",
+      "overrides": {
+        "method": "supervector_cosine",
+        "feature.mode": "group"
+      }
+    },
+    {
+      "id": "supervector_cosine_temporal",
+      "kind": "classical_sv",
+      "config": "configs/new_classical_base.json",
+      "overrides": {
+        "method": "supervector_cosine",
+        "feature.mode": "temporal"
+      }
+    },
+    {
+      "id": "supervector_svm_group",
+      "kind": "classical_sv",
+      "config": "configs/new_classical_base.json",
+      "overrides": {
+        "method": "supervector_svm",
+        "feature.mode": "group"
+      }
+    },
+    {
+      "id": "supervector_svm_temporal",
+      "kind": "classical_sv",
+      "config": "configs/new_classical_base.json",
+      "overrides": {
+        "method": "supervector_svm",
+        "feature.mode": "temporal"
+      }
+    },
+    {
+      "id": "ivector_cosine_group",
+      "kind": "classical_sv",
+      "config": "configs/new_classical_base.json",
+      "overrides": {
+        "method": "ivector_cosine",
+        "feature.mode": "group"
+      }
+    },
+    {
+      "id": "ivector_cosine_temporal",
+      "kind": "classical_sv",
+      "config": "configs/new_classical_base.json",
+      "overrides": {
+        "method": "ivector_cosine",
+        "feature.mode": "temporal"
+      }
+    },
+    {
+      "id": "ivector_plda_group",
+      "kind": "classical_sv",
+      "config": "configs/new_classical_base.json",
+      "overrides": {
+        "method": "ivector_plda",
+        "feature.mode": "group"
+      }
+    },
+    {
+      "id": "ivector_plda_temporal",
+      "kind": "classical_sv",
+      "config": "configs/new_classical_base.json",
+      "overrides": {
+        "method": "ivector_plda",
+        "feature.mode": "temporal"
+      }
+    },
+    {
+      "id": "ivector_lda_plda_group",
+      "kind": "classical_sv",
+      "config": "configs/new_classical_base.json",
+      "overrides": {
+        "method": "ivector_lda_plda",
+        "feature.mode": "group"
+      }
+    },
+    {
+      "id": "ivector_lda_plda_temporal",
+      "kind": "classical_sv",
+      "config": "configs/new_classical_base.json",
+      "overrides": {
+        "method": "ivector_lda_plda",
+        "feature.mode": "temporal"
+      }
+    },
+    {
+      "id": "passphrase_stop_vs_all_word_ubm",
+      "kind": "classical_sv",
+      "config": "configs/new_classical_base.json",
+      "overrides": {
+        "method": "passphrase_ubm"
+      },
+      "tracks": [
+        "google"
+      ]
+    },
+    {
+      "id": "mathworks_phase_40ms_global_map_all",
+      "kind": "gmm_phase",
+      "config": "configs/new_mathworks_phase_gmm.json",
+      "overrides": {}
+    },
+    {
+      "id": "mathworks_phase_40ms_no_global",
+      "kind": "gmm_phase",
+      "config": "configs/new_mathworks_phase_gmm.json",
+      "overrides": {
+        "transform": "pca"
+      }
+    },
+    {
+      "id": "mathworks_phase_40ms_map_means",
+      "kind": "gmm_phase",
+      "config": "configs/new_mathworks_phase_gmm.json",
+      "overrides": {
+        "map.adapt_variances": false,
+        "map.adapt_weights": false
+      }
+    },
+    {
+      "id": "mathworks_phase_40ms_no_median",
+      "kind": "gmm_phase",
+      "config": "configs/new_mathworks_phase_gmm.json",
+      "overrides": {
+        "score.smoothing": 1
+      }
+    },
+    {
+      "id": "mathworks_phase_25ms",
+      "kind": "gmm_phase",
+      "config": "configs/new_mathworks_phase_gmm.json",
+      "overrides": {
+        "feature.win": 400,
+        "feature.n_fft": 512
+      }
+    },
+    {
+      "id": "mathworks_phase_temporal",
+      "kind": "gmm_phase",
+      "config": "configs/new_mathworks_phase_gmm.json",
+      "overrides": {
+        "feature.mode": "temporal"
+      }
+    },
+    {
+      "id": "mathworks_phase_64_mix",
+      "kind": "gmm_phase",
+      "config": "configs/new_mathworks_phase_gmm.json",
+      "overrides": {
+        "em.mixtures": 64
+      }
+    },
+    {
+      "id": "mathworks_phase_relevance8",
+      "kind": "gmm_phase",
+      "config": "configs/new_mathworks_phase_gmm.json",
+      "overrides": {
+        "map.relevance": 8
+      }
+    },
+    {
+      "id": "mathworks_phase_z_norm",
+      "kind": "gmm_phase",
+      "config": "configs/new_mathworks_phase_gmm.json",
+      "overrides": {
+        "score.norm": "z"
+      }
+    },
+    {
+      "id": "mathworks_phase_s_norm",
+      "kind": "gmm_phase",
+      "config": "configs/new_mathworks_phase_gmm.json",
+      "overrides": {
+        "score.norm": "s"
+      }
+    },
+    {
+      "id": "google_keyword_bcnn",
+      "kind": "keyword_google",
+      "config": "configs/new_keyword_base.json",
+      "overrides": {
+        "architecture.name": "bcnn"
+      },
+      "tracks": [
+        "google"
+      ]
+    },
+    {
+      "id": "google_keyword_kwt",
+      "kind": "keyword_google",
+      "config": "configs/new_keyword_base.json",
+      "overrides": {
+        "architecture.name": "kwt"
+      },
+      "tracks": [
+        "google"
+      ]
+    },
+    {
+      "id": "google_keyword_ds_cnn",
+      "kind": "keyword_google",
+      "config": "configs/new_keyword_base.json",
+      "overrides": {
+        "architecture.name": "ds_cnn"
+      },
+      "tracks": [
+        "google"
+      ]
+    },
+    {
+      "id": "google_keyword_tc_resnet",
+      "kind": "keyword_google",
+      "config": "configs/new_keyword_base.json",
+      "overrides": {
+        "architecture.name": "tc_resnet"
+      },
+      "tracks": [
+        "google"
+      ]
+    },
+    {
+      "id": "google_keyword_crnn",
+      "kind": "keyword_google",
+      "config": "configs/new_keyword_base.json",
+      "overrides": {
+        "architecture.name": "crnn"
+      },
+      "tracks": [
+        "google"
+      ]
+    },
+    {
+      "id": "google_keyword_resnet",
+      "kind": "keyword_google",
+      "config": "configs/new_keyword_base.json",
+      "overrides": {
+        "architecture.name": "resnet"
+      },
+      "tracks": [
+        "google"
+      ]
+    },
+    {
+      "id": "google_keyword_se_resnet",
+      "kind": "keyword_google",
+      "config": "configs/new_keyword_base.json",
+      "overrides": {
+        "architecture.name": "se_resnet"
+      },
+      "tracks": [
+        "google"
+      ]
+    },
+    {
+      "id": "google_keyword_conformer",
+      "kind": "keyword_google",
+      "config": "configs/new_keyword_base.json",
+      "overrides": {
+        "architecture.name": "conformer"
+      },
+      "tracks": [
+        "google"
+      ]
+    },
+    {
+      "id": "calibrate_bcnn_aam",
+      "kind": "calibrate",
+      "config": "configs/new_calibration.json",
+      "overrides": {},
+      "source_job": "bcnn_aam"
+    },
+    {
+      "id": "calibrate_ecapa_ge2e",
+      "kind": "calibrate",
+      "config": "configs/new_calibration.json",
+      "overrides": {},
+      "source_job": "ecapa_ge2e"
+    },
+    {
+      "id": "calibrate_xvector_ge2e",
+      "kind": "calibrate",
+      "config": "configs/new_calibration.json",
+      "overrides": {},
+      "source_job": "xvector_ge2e"
+    },
+    {
+      "id": "calibrate_mathworks_phase_40ms_global_map_all",
+      "kind": "calibrate",
+      "config": "configs/new_calibration.json",
+      "overrides": {},
+      "source_job": "mathworks_phase_40ms_global_map_all"
+    }
+  ]
+}

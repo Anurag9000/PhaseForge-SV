@@ -1,0 +1,41 @@
+{
+  "feature": {
+    "mode": "group",
+    "win": 640,
+    "hop": 160,
+    "n_fft": 1024,
+    "bands": 24,
+    "normalization": "none",
+    "masked_mean": false,
+    "vad_db": -30
+  },
+  "em": {
+    "mixtures": 32,
+    "covariance": "diag",
+    "init": "random",
+    "iterations": 20,
+    "tolerance": 0.0002,
+    "reg": 0.02,
+    "chunk": 2048
+  },
+  "map": {
+    "relevance": 16,
+    "adapt_variances": true,
+    "adapt_weights": true
+  },
+  "score": {
+    "norm": "none",
+    "smoothing": 3
+  },
+  "transform": "global_pca",
+  "dimensions": 24,
+  "seeds": [
+    2026,
+    3107,
+    4109
+  ],
+  "enrolment_size": 3,
+  "max_frames_per_background_file": 32,
+  "evaluate_eval": false,
+  "device": "auto"
+}

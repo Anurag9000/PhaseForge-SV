@@ -1,0 +1,36 @@
+{
+  "feature": {
+    "mode": "group",
+    "win": 400,
+    "hop": 160,
+    "n_fft": 512,
+    "bands": 24,
+    "vad_db": -30,
+    "normalization": "utterance"
+  },
+  "architecture": {
+    "name": "xvector",
+    "channels": 64,
+    "embedding": 64,
+    "depth": 3,
+    "heads": 4,
+    "dropout": 0.1,
+    "res2_scale": 4
+  },
+  "objective": "aam",
+  "epochs": 12,
+  "steps_per_epoch": 100,
+  "speakers_per_batch": 8,
+  "takes_per_speaker": 3,
+  "max_frames": 128,
+  "learning_rate": 0.001,
+  "weight_decay": 0.0001,
+  "seed": 2026,
+  "device": "auto",
+  "max_background_files": null,
+  "score": "cosine",
+  "evaluate_locked_test": false,
+  "augment_noise": 0.02,
+  "augment_mask_probability": 0.08,
+  "ema_decay": 0.99
+}
