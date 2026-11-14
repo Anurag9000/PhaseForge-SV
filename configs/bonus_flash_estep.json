@@ -1,0 +1,33 @@
+{
+  "scope": "independent_spherical_gpu_estep_comparison_only",
+  "cases": [
+    {
+      "name": "flash_small",
+      "n": 10000,
+      "k": 32,
+      "d": 24,
+      "seed": 2026
+    },
+    {
+      "name": "flash_medium",
+      "n": 100000,
+      "k": 128,
+      "d": 64,
+      "seed": 2026
+    },
+    {
+      "name": "flash_large",
+      "n": 1000000,
+      "k": 256,
+      "d": 96,
+      "seed": 2026
+    },
+    {
+      "name": "flash_high_mixtures",
+      "n": 100000,
+      "k": 1024,
+      "d": 128,
+      "seed": 2026
+    }
+  ]
+}
