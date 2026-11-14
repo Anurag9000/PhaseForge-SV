@@ -39,6 +39,23 @@ def _revision():
     return p.stdout.strip() or "unknown"
 
 
+def _implementation_fingerprint() -> str:
+    """Hash executable Python implementation, not docs/tests or Git metadata.
+
+    A documentation-only commit should not retrain a 127-job GPU suite;
+    any implementation edit must invalidate the previously completed job.
+    """
+    digest = hashlib.sha256()
+    directory = Path(__file__).resolve().parent
+    files = sorted(directory.glob("*.py"))
+    if not files:
+        raise RuntimeError("PhaseForge implementation modules not found")
+    for file in files:
+        digest.update(file.name.encode())
+        digest.update(file.read_bytes())
+    return digest.hexdigest()
+
+
 def _deep_set(root: dict, key: str, value):
     path = key.split(".")
     node = root
@@ -95,6 +112,7 @@ def execute_new_suite(
             ).hexdigest(),
         }
     revision = _revision()
+    implementation_sha = _implementation_fingerprint()
     state_file = output / "new_suite_ledger.json"
     ledger = json.loads(state_file.read_text()) if state_file.exists() else {}
     entries = []
@@ -127,8 +145,18 @@ def execute_new_suite(
             config["evaluate_locked_test"] = False
         identity = {
             "job": job, "config": config, "data": str(source), "track": track,
-            "source_signature": signature, "revision": revision,
+            "source_signature": signature,
+            "implementation_sha256": implementation_sha,
         }
+        if kind == "calibrate":
+            # A changed source model must invalidate the calibrated output
+            # even when the calibration hyperparameters stayed the same.
+            parent = next(
+                (entry for entry in entries if entry["id"] == job.get("source_job")),
+                None,
+            )
+            identity["source_job_key"] = parent.get("key") if parent else None
+            identity["source_job_status"] = parent.get("status") if parent else None
         key = _sha256(identity)
         path = output / "jobs" / f"{i:03d}_{job['id']}"
         previous = ledger.get(job["id"])
@@ -143,6 +171,7 @@ def execute_new_suite(
             "id": job["id"], "kind": kind, "key": key, "track": track,
             "config": config, "directory": str(path),
             "revision": revision, "source_signature": signature,
+            "implementation_sha256": implementation_sha,
         }
         try:
             if kind == "gmm_phase":
@@ -199,6 +228,7 @@ def execute_new_suite(
     summary = {
         "track": track, "suite_family": "new_phase_research",
         "source_signature": signature, "git_revision": revision,
+        "implementation_sha256": implementation_sha,
         "registered_jobs": len(manifest["jobs"]), "attempted": len(entries),
         "completed": len(completed),
         "failed": sum(x["status"] == "failed" for x in entries),
