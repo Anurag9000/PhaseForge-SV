@@ -156,9 +156,25 @@ def execute_new_suite(
         if kind == "gmm_phase":
             config["evaluate_eval"] = False
             config["save_model"] = False
+            if track == "google":
+                # A Google research benchmark may use 1+1 original stop
+                # takes, unlike Kaggle's mandatory three-enrolment format.
+                # Its manifest—not dev metrics—defines the correct count.
+                protocol = json.loads(
+                    (Path(benchmark) / "google_benchmark.json").read_text()
+                )
+                config["enrolment_size"] = int(
+                    protocol["enrolment_takes_per_speaker"]
+                )
         elif kind in ("neural_sv", "classical_sv", "keyword_google",
                       "mathworks_reference"):
             config["evaluate_locked_test"] = False
+            if kind == "neural_sv" and track == "google":
+                # Original stop recordings are not guaranteed to have three
+                # distinct takes per background speaker. GE2E requires >=2.
+                config["takes_per_speaker"] = min(
+                    2, int(config.get("takes_per_speaker", 3))
+                )
         identity = {
             "job": job, "config": config, "data": str(source), "track": track,
             "source_signature": signature,
