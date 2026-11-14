@@ -19,14 +19,17 @@ class ScoreConfig:
     cohort_seed: int = 2026
     cohort_speakers: int = 32
     cohort_test_files: int = 50
+    cohort_top_k: int = 20
 
     def validate(self) -> None:
         if self.smoothing % 2 != 1 or self.smoothing < 1:
             raise ValueError("Median smoothing window must be positive and odd")
-        if self.norm not in ("none", "z", "t", "s"):
+        if self.norm not in ("none", "z", "t", "s", "adaptive_s"):
             raise ValueError("Unsupported score normalization")
         if self.norm_stage not in ("per_seed", "after_ensemble"):
             raise ValueError("Unknown score-normalization stage")
+        if self.cohort_top_k < 1:
+            raise ValueError("cohort_top_k must be positive")
 
 
 @torch.no_grad()
@@ -115,30 +118,38 @@ def cohort_normalize(
     if not background_test_files or not cohort:
         raise ValueError("Score normalization requires background-only cohort")
     z_stats, t_stats = {}, {}
-    if config.norm in ("z", "s"):
+    if config.norm in ("z", "s", "adaptive_s"):
         for claimed, model in targets.items():
             baseline = torch.stack([
                 likelihood_ratio(ubm, model, feature[file], config.smoothing,
                                  config.top_components)
                 for file in background_test_files
             ]).double()
+            if config.norm == "adaptive_s":
+                baseline = baseline.topk(
+                    min(config.cohort_top_k, len(baseline))
+                ).values
             z_stats[claimed] = (baseline.mean(), baseline.std(unbiased=False).clamp_min(.03))
-    if config.norm in ("t", "s"):
+    if config.norm in ("t", "s", "adaptive_s"):
         for test in sorted({r["test_file"] for r in trials}):
             cohort_scores = torch.stack([
                 likelihood_ratio(ubm, model, feature[test], config.smoothing,
                                  config.top_components)
                 for model in cohort.values()
             ]).double()
+            if config.norm == "adaptive_s":
+                cohort_scores = cohort_scores.topk(
+                    min(config.cohort_top_k, len(cohort_scores))
+                ).values
             t_stats[test] = (
                 cohort_scores.mean(), cohort_scores.std(unbiased=False).clamp_min(.03)
             )
     norm_scores = []
     for row, score in zip(trials, scores):
-        if config.norm in ("z", "s"):
+        if config.norm in ("z", "s", "adaptive_s"):
             mu, sd = z_stats[row["claimed_id"]]
             z = (score - mu) / sd
-        if config.norm in ("t", "s"):
+        if config.norm in ("t", "s", "adaptive_s"):
             mu, sd = t_stats[row["test_file"]]
             t = (score - mu) / sd
         norm_scores.append(z if config.norm == "z" else t if config.norm == "t" else (z + t) / 2)
@@ -168,7 +179,7 @@ def cohort_score_tables(
     background_files = sorted(background_test_files)
     z = None
     t = None
-    if config.norm in ("z", "s"):
+    if config.norm in ("z", "s", "adaptive_s"):
         z = torch.stack([
             torch.stack([
                 likelihood_ratio(
@@ -177,7 +188,7 @@ def cohort_score_tables(
                 ) for file in background_files
             ]) for name in target_names
         ]).double()
-    if config.norm in ("t", "s"):
+    if config.norm in ("t", "s", "adaptive_s"):
         t = torch.stack([
             torch.stack([
                 likelihood_ratio(
@@ -217,15 +228,19 @@ def ensemble_cohort_normalize(
     if any(any(table[key] != baseline[key] for key in names) for table in seed_tables):
         raise ValueError("Every seed must use the same background-only cohort population")
     norm = {}
-    if config.norm in ("z", "s"):
+    if config.norm in ("z", "s", "adaptive_s"):
         scores = torch.stack([table["z"].cpu() for table in seed_tables]).mean(0)
+        if config.norm == "adaptive_s":
+            scores = scores.topk(min(config.cohort_top_k, scores.shape[1]), dim=1).values
         norms = scores.std(1, unbiased=scores.shape[1] > 1).clamp_min(.03)
         norm["z"] = {
             name: (scores[i].mean(), norms[i])
             for i, name in enumerate(baseline["target_names"])
         }
-    if config.norm in ("t", "s"):
+    if config.norm in ("t", "s", "adaptive_s"):
         scores = torch.stack([table["t"].cpu() for table in seed_tables]).mean(0)
+        if config.norm == "adaptive_s":
+            scores = scores.topk(min(config.cohort_top_k, scores.shape[1]), dim=1).values
         norms = scores.std(1, unbiased=scores.shape[1] > 1).clamp_min(.03)
         norm["t"] = {
             name: (scores[i].mean(), norms[i])
@@ -233,10 +248,10 @@ def ensemble_cohort_normalize(
         }
     corrected = []
     for row, score in zip(trials, mean_raw_scores.cpu().double()):
-        if config.norm in ("z", "s"):
+        if config.norm in ("z", "s", "adaptive_s"):
             mu, sd = norm["z"][row["claimed_id"]]
             zscore = (score - mu) / sd
-        if config.norm in ("t", "s"):
+        if config.norm in ("t", "s", "adaptive_s"):
             mu, sd = norm["t"][row["test_file"]]
             tscore = (score - mu) / sd
         corrected.append(
