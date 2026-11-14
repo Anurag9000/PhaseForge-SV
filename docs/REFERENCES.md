@@ -19,3 +19,14 @@
    not a claim to exactly reproduce that paper's corpus or results.
 
 Any directly adapted external code or model must be cited and licensed.
+
+
+## Additional published references
+
+- Sinha et al., braided CNN: https://doi.org/10.1049/iet-spr.2019.0381
+- Google GE2E: https://google.github.io/speaker-id/publications/GE2E/
+- Google end-to-end text-dependent verification: https://research.google/pubs/end-to-end-text-dependent-speaker-verification/
+- ECAPA-TDNN: https://arxiv.org/abs/2005.07143
+- Keyword Transformer: https://arxiv.org/abs/2104.00769
+- i-vectors: https://speechprocessingbook.aalto.fi/recognition/speaker-recognition-and-verification/
+- MathWorks GMM/MFCC reference: https://www.mathworks.com/help/audio/ug/speaker-verification-using-gaussian-mixture-model.html
