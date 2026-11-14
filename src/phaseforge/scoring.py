@@ -20,6 +20,9 @@ class ScoreConfig:
     cohort_speakers: int = 32
     cohort_test_files: int = 50
     cohort_top_k: int = 20
+    implementation: str = "reference"  # reference | batched
+    speaker_chunk: int = 16
+    frame_chunk: int = 1024
 
     def validate(self) -> None:
         if self.smoothing % 2 != 1 or self.smoothing < 1:
@@ -30,6 +33,10 @@ class ScoreConfig:
             raise ValueError("Unknown score-normalization stage")
         if self.cohort_top_k < 1:
             raise ValueError("cohort_top_k must be positive")
+        if self.implementation not in ("reference", "batched"):
+            raise ValueError("Unknown GMM scoring implementation")
+        if self.speaker_chunk < 1 or self.frame_chunk < 1:
+            raise ValueError("Invalid scoring chunk size")
 
 
 @torch.no_grad()
@@ -84,6 +91,13 @@ def score_trials(
     speakers: dict[str, TorchGMM], config: ScoreConfig = ScoreConfig(),
 ) -> torch.Tensor:
     config.validate()
+    if config.implementation == "batched":
+        from .bonus_scoring import accelerated_score_trials
+        return accelerated_score_trials(
+            ubm, features, trials, speakers, config,
+            speaker_chunk=config.speaker_chunk,
+            frame_chunk=config.frame_chunk,
+        )
     cache = {}
     output = []
     for row in trials:
