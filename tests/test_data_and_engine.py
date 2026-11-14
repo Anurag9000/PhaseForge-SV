@@ -222,3 +222,51 @@ def test_research_corpus_refused_by_kaggle_suite():
 
     with pytest.raises(ValueError, match="Kaggle-only"):
         execute_suite("irrelevant", {"track":"google","jobs":[]}, "irrelevant")
+
+
+
+def test_new_neural_real_wav_pipeline_is_background_only(tiny_kaggle):
+    """Train, enrol and score an actual PCM-16 Kaggle-shaped synthetic dataset."""
+    from phaseforge.new_neural_runner import NeuralRun, run_neural
+    cfg = NeuralRun.from_dict({
+        "feature": {"mode":"group","bands":8},
+        "architecture":{"name":"bcnn","channels":16,"embedding":8,"depth":1},
+        "objective":"ge2e",
+        "epochs":1,"steps_per_epoch":1,
+        "speakers_per_batch":2,"takes_per_speaker":2,
+        "max_frames":24,"device":"cpu",
+        "evaluate_locked_test":False,
+    })
+    out = tiny_kaggle / "neural_research"
+    result = run_neural(tiny_kaggle, cfg, out)
+    assert result["source_track"] == "kaggle"
+    assert result["research_only"]
+    assert (out / "checkpoint.pt").exists()
+    assert (out / "development_scores.csv").exists()
+    assert not (out / "evaluation_scores.csv").exists()
+    assert not (out / "submission.csv").exists()
+
+
+@pytest.mark.parametrize("method", [
+    "supervector_cosine", "supervector_svm",
+    "ivector_cosine", "ivector_plda", "ivector_lda_plda",
+])
+def test_new_classical_real_wav_pipeline_methods(tiny_kaggle, method):
+    from phaseforge.new_classical_runner import ClassicalRun, run_classical
+    cfg = ClassicalRun.from_dict({
+        "method":method,
+        "feature":{"mode":"group","bands":8},
+        "em":{"mixtures":2,"covariance":"diag","iterations":4,"reg":.05},
+        "map":{"relevance":4},
+        "transform":"pca","dimensions":4,
+        "tv_dimension":2,"tv_iterations":2,
+        "lda_dimension":2,"frame_cap":4,
+        "device":"cpu","evaluate_locked_test":False,
+    })
+    out = tiny_kaggle / f"classical_{method}"
+    result = run_classical(tiny_kaggle, cfg, out)
+    assert result["method"] == method
+    assert result["research_only"]
+    assert (out / "checkpoint.pt").exists()
+    assert (out / "development_scores.csv").exists()
+    assert not (out / "submission.csv").exists()
