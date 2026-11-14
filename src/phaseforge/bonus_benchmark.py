@@ -159,7 +159,7 @@ def synthetic_data(case: BenchCase):
         "case_seed": case.seed, "true_mixture_weights": probs.tolist(),
         "source": "synthetic", "regime": case.regime,
         "true_means_sha256": hashlib.sha256(
-            means.cpu().numpy().tobytes()
+            array("d" if case.dtype == "float64" else "f", means.cpu().reshape(-1).tolist()).tobytes()
         ).hexdigest(),
     }, None
 
@@ -466,8 +466,8 @@ def run_bonus(
                     case, kaggle_root, output / "phase_cache"
                 )
             source_hash = hashlib.sha256(
-                train.cpu().contiguous().numpy().tobytes()
-                + held.cpu().contiguous().numpy().tobytes()
+                array("d" if case.dtype == "float64" else "f", train.cpu().reshape(-1).tolist()).tobytes()
+                + array("d" if case.dtype == "float64" else "f", held.cpu().reshape(-1).tolist()).tobytes()
             ).hexdigest()
         except Exception as exc:
             if strict:
