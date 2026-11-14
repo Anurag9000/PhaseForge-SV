@@ -89,6 +89,19 @@ class GlobalProjectedTransform:
         return self.projection(self.global_norm(features))
 
 
+
+class GlobalLocalCenteredProjection:
+    """Global background CMVN -> utterance scalar mean -> background-fitted PCA."""
+
+    def __init__(self, global_norm: BackgroundCMVN, projection: PCA):
+        self.global_norm, self.projection = global_norm, projection
+
+    def __call__(self, features: torch.Tensor):
+        z = self.global_norm(features)
+        z = z - z.mean()  # MATLAB-style scalar cepstral mean (all channels/frames).
+        return self.projection(z)
+
+
 def fit_background_transform(
     features: dict[str, torch.Tensor], background_ids: list[str],
     method: str, dim: int, max_frames: int = 50000,
@@ -110,6 +123,20 @@ def fit_background_transform(
         transform = ICA(dim, seed=seed).fit(X)
     elif method == "global":
         transform = BackgroundCMVN().fit(X)
+    elif method == "global_local_pca":
+        normalizer = BackgroundCMVN().fit(X)
+        # Apply local centering independently to each background utterance
+        # BEFORE PCA; dev and test utterances never influence fitted parameters.
+        pool = torch.cat([
+            normalizer(features[file]) - normalizer(features[file]).mean()
+            for file in background_ids
+        ], 0)
+        if len(pool) > max_frames:
+            pool = pool[torch.linspace(
+                0, len(pool)-1, max_frames, device=pool.device
+            ).long()]
+        projection = PCA(dim).fit(pool)
+        transform = GlobalLocalCenteredProjection(normalizer, projection)
     elif method in ("global_pca", "global_whiten", "global_ica"):
         normalizer = BackgroundCMVN().fit(X)
         whitened = normalizer(X)
