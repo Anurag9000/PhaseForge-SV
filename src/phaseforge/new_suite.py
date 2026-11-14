@@ -103,14 +103,27 @@ def execute_new_suite(
             signature["manifest_digest"] = digest.hexdigest()
             # Hash ZIP central-directory identity without reading/decoding
             # the complete multi-gigabyte archive before every resumed job.
-            zip_digest = hashlib.sha256()
-            with zipfile.ZipFile(source / "audio.zip") as archive:
-                for info in sorted(archive.infolist(), key=lambda x: x.filename):
-                    zip_digest.update(
-                        f"{info.filename}|{info.file_size}|{info.compress_size}|"
-                        f"{info.CRC:08x}\n".encode()
+            audio_digest = hashlib.sha256()
+            if (source / "audio.zip").is_file():
+                with zipfile.ZipFile(source / "audio.zip") as archive:
+                    for info in sorted(archive.infolist(), key=lambda x: x.filename):
+                        audio_digest.update(
+                            f"{info.filename}|{info.file_size}|{info.compress_size}|"
+                            f"{info.CRC:08x}\n".encode()
+                        )
+                signature["audio_format"] = "zip"
+            else:
+                audio = source / "audio"
+                if not audio.is_dir():
+                    raise FileNotFoundError("Missing audio.zip or extracted audio/")
+                for file in sorted(audio.rglob("*.wav")):
+                    stat = file.stat()
+                    audio_digest.update(
+                        f"{file.relative_to(audio)}|{stat.st_size}|"
+                        f"{stat.st_mtime_ns}\n".encode()
                     )
-            signature["audio_zip_directory_sha256"] = zip_digest.hexdigest()
+                signature["audio_format"] = "directory"
+            signature["audio_source_sha256"] = audio_digest.hexdigest()
     else:
         benchmark = Path(benchmark).resolve()
         locked_files = (
